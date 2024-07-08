@@ -58,3 +58,24 @@ SELECT
    md5(random()::text) AS Contact_info
 FROM
    generate_series(1, 100000);
+
+
+-- Drop the Products table if it already exists
+DROP TABLE IF EXISTS Products;
+
+-- Create the Products table
+CREATE TABLE Products (
+    Product_id SERIAL PRIMARY KEY,
+    Supplier_id INT NOT NULL,
+    Product_name VARCHAR(100) NOT NULL,
+    FOREIGN KEY (Supplier_id) REFERENCES Suppliers(supplier_id)
+);
+
+
+-- Insert random data into Products table
+INSERT INTO Products (Supplier_id, Product_name)
+SELECT
+    width_bucket(random(), 0, 1, (SELECT MAX(Supplier_id) FROM Suppliers)), 
+    md5(random()::text) AS Product_name
+FROM 
+   generate_series(1, 10000000);       

@@ -528,4 +528,182 @@ commercedb=# EXPLAIN (ANALYZE, BUFFERS, VERBOSE) SELECT supplier_id, supplier_na
 
 
 
+--- Products table sql code during creation
+commercedb=# DROP TABLE IF EXISTS Products;
+NOTICE:  table "products" does not exist, skipping
+DROP TABLE
+commercedb=# CREATE TABLE Products (
+    Product_id SERIAL PRIMARY KEY,
+    Supplier_id INT NOT NULL,
+    Product_name VARCHAR(100) NOT NULL,
+    FOREIGN KEY (Supplier_id) REFERENCES Suppliers(supplier_id)
+);
+CREATE TABLE
+commercedb=# \dt
+           List of relations
+ Schema |   Name    | Type  |  Owner   
+--------+-----------+-------+----------
+ public | accounts  | table | postgres
+ public | customers | table | postgres
+ public | products  | table | postgres
+ public | suppliers | table | postgres
+(4 rows)
+
+commercedb=# \d products
+                                           Table "public.products"
+    Column    |          Type          | Collation | Nullable |                   Default                    
+--------------+------------------------+-----------+----------+----------------------------------------------
+ product_id   | integer                |           | not null | nextval('products_product_id_seq'::regclass)
+ supplier_id  | integer                |           | not null | 
+ product_name | character varying(100) |           | not null | 
+Indexes:
+    "products_pkey" PRIMARY KEY, btree (product_id)
+Foreign-key constraints:
+    "products_supplier_id_fkey" FOREIGN KEY (supplier_id) REFERENCES suppliers(supplier_id)
+
+commercedb=# INSERT INTO Products (Supplier_id, Product_name)
+SELECT
+    (random() * 100000)::INT + 1,                              
+    md5(random()::text) AS Product_name
+FROM generate_sereis(1, 10000000)
+commercedb-# ;
+ERROR:  function generate_sereis(integer, integer) does not exist
+LINE 5: FROM generate_sereis(1, 10000000)
+             ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+commercedb=# INSERT INTO Products (Supplier_id, Product_name)
+SELECT
+    (random() * 100000)::INT + 1, 
+    md5(random()::text) AS Product_name
+FROM generate_series(1, 10000000)
+;
+ERROR:  insert or update on table "products" violates foreign key constraint "products_supplier_id_fkey"
+DETAIL:  Key (supplier_id)=(100001) is not present in table "suppliers".
+commercedb=# INSERT INTO Products (Supplier_id, Product_name)
+SELECT
+    (random() * (SELECT MAX(Supplier_id) FROM Suppliers))::INT + 1, 
+    md5(random()::text) AS Product_name
+FROM 
+   generate_series(1, 10000000);
+ERROR:  insert or update on table "products" violates foreign key constraint "products_supplier_id_fkey"
+DETAIL:  Key (supplier_id)=(100001) is not present in table "suppliers".
+commercedb=# INSERT INTO Products (Supplier_id, Product_name)
+SELECT
+    width_bucket(random(), 0, 1, (SELECT MAX(Supplier_id) FROM Suppliers)), 
+    md5(random()::text) AS Product_name
+FROM 
+   generate_series(1, 10000000); 
+INSERT 0 10000000
+commercedb=# SELECT COUNT(*) FROM Products;
+  count   
+----------
+ 10000000
+(1 row)
+
+commercedb=# EXPLAIN (ANALYZE, BUFFERS, VERBOSE) SELECT COUNT(*) FROM Products;
+                                                                      QUERY PLAN                                                                       
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=146541.58..146541.59 rows=1 width=8) (actual time=768.671..776.626 rows=1 loops=1)
+   Output: count(*)
+   Buffers: shared hit=14504 read=78954
+   ->  Gather  (cost=146541.36..146541.57 rows=2 width=8) (actual time=768.487..776.591 rows=3 loops=1)
+         Output: (PARTIAL count(*))
+         Workers Planned: 2
+         Workers Launched: 2
+         Buffers: shared hit=14504 read=78954
+         ->  Partial Aggregate  (cost=145541.36..145541.37 rows=1 width=8) (actual time=698.789..698.790 rows=1 loops=3)
+               Output: PARTIAL count(*)
+               Buffers: shared hit=14504 read=78954
+               Worker 0:  actual time=661.795..661.797 rows=1 loops=1
+                 JIT:
+                   Functions: 2
+                   Options: Inlining false, Optimization false, Expressions true, Deforming true
+                   Timing: Generation 0.252 ms, Inlining 0.000 ms, Optimization 0.309 ms, Emission 4.651 ms, Total 5.213 ms
+                 Buffers: shared hit=3602 read=20728
+               Worker 1:  actual time=666.789..666.791 rows=1 loops=1
+                 JIT:
+                   Functions: 2
+                   Options: Inlining false, Optimization false, Expressions true, Deforming true
+                   Timing: Generation 0.262 ms, Inlining 0.000 ms, Optimization 0.314 ms, Emission 4.970 ms, Total 5.545 ms
+                 Buffers: shared hit=3736 read=21545
+               ->  Parallel Seq Scan on public.products  (cost=0.00..135124.69 rows=4166669 width=0) (actual time=0.057..439.646 rows=3333333 loops=3)
+                     Output: product_id, supplier_id, product_name
+                     Buffers: shared hit=14504 read=78954
+                     Worker 0:  actual time=0.059..426.318 rows=2603310 loops=1
+                       Buffers: shared hit=3602 read=20728
+                     Worker 1:  actual time=0.051..429.283 rows=2705067 loops=1
+                       Buffers: shared hit=3736 read=21545
+ Planning:
+   Buffers: shared hit=14
+ Planning Time: 0.466 ms
+ JIT:
+   Functions: 8
+   Options: Inlining false, Optimization false, Expressions true, Deforming true
+   Timing: Generation 1.286 ms, Inlining 0.000 ms, Optimization 1.118 ms, Emission 30.569 ms, Total 32.973 ms
+ Execution Time: 777.507 ms
+(38 rows)
+
+commercedb=# SELECT * FROM Products ORDER BY product_id LIMIT 10;
+ product_id | supplier_id |           product_name           
+------------+-------------+----------------------------------
+   20000001 |       92685 | 317079f7fe0b81744dd84d57b93cd5c3
+   20000002 |       11560 | fba54e7fc8f2224589ccee2485ae4246
+   20000003 |       58539 | a3f3e90a11aec0575539bc054e553f0a
+   20000004 |       40119 | bba7bf403fb02a42b68e1b96daee5061
+   20000005 |       51047 | f2c5b79271e521e0fc888c8c8b12e1c0
+   20000006 |       34495 | ef1697ae7cdd474c278a0beb3c8fd9b0
+   20000007 |        4958 | 213c79ba1f9f8f3e4147c66ff8cc5225
+   20000008 |       38458 | aeb033ecf62216c8b9ec9c7b3a30ccb2
+   20000009 |       18535 | 206e5ce626cd8656c6141d67a07d2908
+   20000010 |       76181 | 57d4185164f0f768688fd54d7c6d086b
+(10 rows)
+
+commercedb=# EXPLAIN (ANALYZE, BUFFERS, VERBOSE) SELECT * FROM Products ORDER BY product_id LIMIT 10;
+                                                                    QUERY PLAN                                                                     
+---------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.43..0.90 rows=10 width=41) (actual time=0.102..0.125 rows=10 loops=1)
+   Output: product_id, supplier_id, product_name
+   Buffers: shared hit=4
+   ->  Index Scan using products_pkey on public.products  (cost=0.43..462813.53 rows=10000006 width=41) (actual time=0.096..0.111 rows=10 loops=1)
+         Output: product_id, supplier_id, product_name
+         Buffers: shared hit=4
+ Planning Time: 0.379 ms
+ Execution Time: 0.195 ms
+(8 rows)
+
+commercedb=# SELECT MIN(Product_id), MAX(product_id) FROM Products;
+   min    |   max    
+----------+----------
+ 20000001 | 30000000
+(1 row)
+
+commercedb=# EXPLAIN (ANALYZE, BUFFERS, VERBOSE) SELECT MIN(Product_id), MAX(product_id) FROM Products;
+                                                                                    QUERY PLAN                                                                                    
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Result  (cost=0.95..0.96 rows=1 width=8) (actual time=0.074..0.076 rows=1 loops=1)
+   Output: $0, $1
+   Buffers: shared hit=8
+   InitPlan 1 (returns $0)
+     ->  Limit  (cost=0.43..0.47 rows=1 width=4) (actual time=0.047..0.048 rows=1 loops=1)
+           Output: products.product_id
+           Buffers: shared hit=4
+           ->  Index Only Scan using products_pkey on public.products  (cost=0.43..394352.54 rows=10000006 width=4) (actual time=0.045..0.046 rows=1 loops=1)
+                 Output: products.product_id
+                 Index Cond: (products.product_id IS NOT NULL)
+                 Heap Fetches: 0
+                 Buffers: shared hit=4
+   InitPlan 2 (returns $1)
+     ->  Limit  (cost=0.43..0.47 rows=1 width=4) (actual time=0.021..0.021 rows=1 loops=1)
+           Output: products_1.product_id
+           Buffers: shared hit=4
+           ->  Index Only Scan Backward using products_pkey on public.products products_1  (cost=0.43..394352.54 rows=10000006 width=4) (actual time=0.020..0.020 rows=1 loops=1)
+                 Output: products_1.product_id
+                 Index Cond: (products_1.product_id IS NOT NULL)
+                 Heap Fetches: 0
+                 Buffers: shared hit=4
+ Planning Time: 0.187 ms
+ Execution Time: 0.110 ms
+(23 rows)
+
+
 
