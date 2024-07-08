@@ -707,3 +707,157 @@ commercedb=# EXPLAIN (ANALYZE, BUFFERS, VERBOSE) SELECT MIN(Product_id), MAX(pro
 
 
 
+
+--- SQL Code for Prices table creation
+
+commercedb=# DROP TABLE IF EXISTS Prices;
+NOTICE:  table "prices" does not exist, skipping
+DROP TABLE
+commercedb=# CREATE TABLE Prices (
+    Price_id SERIAL PRIMARY KEY,
+    Product_id INT NOT NULL,
+    Price NUMERIC(10, 2) NOT NULL,
+    FOREIGN KEY (Product_id) REFERENCES Products(Product_id)
+);
+CREATE TABLE
+commercedb=# \dt
+           List of relations
+ Schema |   Name    | Type  |  Owner   
+--------+-----------+-------+----------
+ public | accounts  | table | postgres
+ public | customers | table | postgres
+ public | prices    | table | postgres
+ public | products  | table | postgres
+ public | suppliers | table | postgres
+(5 rows)
+
+commercedb=# \d prices
+                                    Table "public.prices"
+   Column   |     Type      | Collation | Nullable |                 Default                  
+------------+---------------+-----------+----------+------------------------------------------
+ price_id   | integer       |           | not null | nextval('prices_price_id_seq'::regclass)
+ product_id | integer       |           | not null | 
+ price      | numeric(10,2) |           | not null | 
+Indexes:
+    "prices_pkey" PRIMARY KEY, btree (price_id)
+Foreign-key constraints:
+    "prices_product_id_fkey" FOREIGN KEY (product_id) REFERENCES products(product_id)
+
+commercedb=# INSERT INTO Prices (Product_id, Price)
+SELECT
+    Product_id,
+    (random() * 1000)::NUMERIC(10, 2) AS Price    
+FROM Products;
+INSERT 0 10000000
+commercedb=# SELECT COUNT(*) FROM Prices;
+  count   
+----------
+ 10000000
+(1 row)
+
+commercedb=# EXPLAIN (ANALYZE, BUFFERS, VERBOSE) SELECT COUNT(*) FROM Prices;
+                                                                     QUERY PLAN                                                                     
+----------------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=107139.46..107139.47 rows=1 width=8) (actual time=1129.241..1136.753 rows=1 loops=1)
+   Output: count(*)
+   Buffers: shared hit=5147 read=48908
+   ->  Gather  (cost=107139.25..107139.46 rows=2 width=8) (actual time=1129.090..1136.723 rows=3 loops=1)
+         Output: (PARTIAL count(*))
+         Workers Planned: 2
+         Workers Launched: 2
+         Buffers: shared hit=5147 read=48908
+         ->  Partial Aggregate  (cost=106139.25..106139.26 rows=1 width=8) (actual time=1022.599..1022.600 rows=1 loops=3)
+               Output: PARTIAL count(*)
+               Buffers: shared hit=5147 read=48908
+               Worker 0:  actual time=961.966..961.967 rows=1 loops=1
+                 JIT:
+                   Functions: 2
+                   Options: Inlining false, Optimization false, Expressions true, Deforming true
+                   Timing: Generation 0.983 ms, Inlining 0.000 ms, Optimization 0.984 ms, Emission 20.509 ms, Total 22.476 ms
+                 Buffers: shared hit=1338 read=13024
+               Worker 1:  actual time=977.744..977.745 rows=1 loops=1
+                 JIT:
+                   Functions: 2
+                   Options: Inlining false, Optimization false, Expressions true, Deforming true
+                   Timing: Generation 0.714 ms, Inlining 0.000 ms, Optimization 0.780 ms, Emission 16.721 ms, Total 18.215 ms
+                 Buffers: shared hit=2351 read=21858
+               ->  Parallel Seq Scan on public.prices  (cost=0.00..95722.40 rows=4166740 width=0) (actual time=0.127..610.748 rows=3333333 loops=3)
+                     Output: price_id, product_id, price
+                     Buffers: shared hit=5147 read=48908
+                     Worker 0:  actual time=0.181..585.297 rows=2656795 loops=1
+                       Buffers: shared hit=1338 read=13024
+                     Worker 1:  actual time=0.127..565.420 rows=4478665 loops=1
+                       Buffers: shared hit=2351 read=21858
+ Planning Time: 0.160 ms
+ JIT:
+   Functions: 8
+   Options: Inlining false, Optimization false, Expressions true, Deforming true
+   Timing: Generation 2.791 ms, Inlining 0.000 ms, Optimization 2.370 ms, Emission 62.897 ms, Total 68.058 ms
+ Execution Time: 1137.973 ms
+(36 rows)
+
+commercedb=# SELECT * FROM Prices ORDER BY Price_id LIMIT 10;
+ price_id | product_id | price  
+----------+------------+--------
+        1 |   20000001 | 618.01
+        2 |   20000002 | 164.21
+        3 |   20000003 | 222.54
+        4 |   20000004 | 682.18
+        5 |   20000005 | 766.80
+        6 |   20000006 | 506.21
+        7 |   20000007 |  19.03
+        8 |   20000008 |  44.62
+        9 |   20000009 | 893.28
+       10 |   20000010 | 880.77
+(10 rows)
+
+commercedb=# EXPLAIN (ANALYZE, BUFFERS, VERBOSE) SELECT * FROM Prices ORDER BY Price_id LIMIT 10;
+                                                                  QUERY PLAN                                                                   
+-----------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.43..0.75 rows=10 width=14) (actual time=0.053..0.067 rows=10 loops=1)
+   Output: price_id, product_id, price
+   Buffers: shared hit=4
+   ->  Index Scan using prices_pkey on public.prices  (cost=0.43..313745.06 rows=10000175 width=14) (actual time=0.051..0.059 rows=10 loops=1)
+         Output: price_id, product_id, price
+         Buffers: shared hit=4
+ Planning Time: 0.186 ms
+ Execution Time: 0.105 ms
+(8 rows)
+
+commercedb=# SELECT MIN(Price_id), MAX(Price_id) FROM Prices;
+ min |   max    
+-----+----------
+   1 | 10000000
+(1 row)
+
+commercedb=# EXPLAIN (ANALYZE, BUFFERS, VERBOSE) SELECT MIN(Price_id), MAX(Price_id) FROM Prices;
+                                                                                 QUERY PLAN                                                                                 
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Result  (cost=0.93..0.94 rows=1 width=8) (actual time=0.238..0.244 rows=1 loops=1)
+   Output: $0, $1
+   Buffers: shared hit=8
+   InitPlan 1 (returns $0)
+     ->  Limit  (cost=0.43..0.46 rows=1 width=4) (actual time=0.155..0.158 rows=1 loops=1)
+           Output: prices.price_id
+           Buffers: shared hit=4
+           ->  Index Only Scan using prices_pkey on public.prices  (cost=0.43..284687.50 rows=10000175 width=4) (actual time=0.150..0.151 rows=1 loops=1)
+                 Output: prices.price_id
+                 Index Cond: (prices.price_id IS NOT NULL)
+                 Heap Fetches: 0
+                 Buffers: shared hit=4
+   InitPlan 2 (returns $1)
+     ->  Limit  (cost=0.43..0.46 rows=1 width=4) (actual time=0.064..0.065 rows=1 loops=1)
+           Output: prices_1.price_id
+           Buffers: shared hit=4
+           ->  Index Only Scan Backward using prices_pkey on public.prices prices_1  (cost=0.43..284687.50 rows=10000175 width=4) (actual time=0.062..0.063 rows=1 loops=1)
+                 Output: prices_1.price_id
+                 Index Cond: (prices_1.price_id IS NOT NULL)
+                 Heap Fetches: 0
+                 Buffers: shared hit=4
+ Planning Time: 0.676 ms
+ Execution Time: 0.387 ms
+(23 rows)
+
+
+
+

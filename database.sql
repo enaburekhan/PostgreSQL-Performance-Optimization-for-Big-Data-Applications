@@ -71,11 +71,31 @@ CREATE TABLE Products (
     FOREIGN KEY (Supplier_id) REFERENCES Suppliers(supplier_id)
 );
 
-
 -- Insert random data into Products table
 INSERT INTO Products (Supplier_id, Product_name)
 SELECT
     width_bucket(random(), 0, 1, (SELECT MAX(Supplier_id) FROM Suppliers)), 
     md5(random()::text) AS Product_name
 FROM 
-   generate_series(1, 10000000);       
+   generate_series(1, 10000000);   
+
+
+-- Drop the Prices table if it already exists
+DROP TABLE IF EXISTS Prices;
+
+
+-- Create the Prices table
+CREATE TABLE Prices (
+    Price_id SERIAL PRIMARY KEY,
+    Product_id INT NOT NULL,
+    Price NUMERIC(10, 2) NOT NULL,
+    FOREIGN KEY (Product_id) REFERENCES Products(Product_id)
+);
+
+
+-- Insert random data into the Prices table
+INSERT INTO Prices (Product_id, Price)
+SELECT
+    Product_id,
+    (random() * 1000)::NUMERIC(10, 2) AS Price -- Random Price between 0 and 1000
+FROM Products;
