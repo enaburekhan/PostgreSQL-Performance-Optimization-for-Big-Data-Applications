@@ -859,5 +859,309 @@ commercedb=# EXPLAIN (ANALYZE, BUFFERS, VERBOSE) SELECT MIN(Price_id), MAX(Price
 (23 rows)
 
 
+--- SQL Code for Orders Table Creation
+commercedb=# DROP TABLE IF EXISTS Orders;
+NOTICE:  table "orders" does not exist, skipping
+DROP TABLE
+commercedb=# DROP TABLE IF EXISTS Orders;
+NOTICE:  table "orders" does not exist, skipping
+DROP TABLE
+commercedb=# CREATE TABLE Orders (
+    Order_id SERIAL PRIMARY KEY,
+    Order_date TIMESTAMP,
+    Quantity INT NOT NULL,
+    Customer_id INT NOT NULL,
+    Product_id INT NOT NULL,
+    FOREIGN KEY (Customer_id) REFERENCES Customers(Customer_id),
+    FOREIGN KEY (Product_id) REFERENCES Products(Product_id)
+);
+CREATE TABLE
+commercedb=# \dt
+           List of relations
+ Schema |   Name    | Type  |  Owner   
+--------+-----------+-------+----------
+ public | accounts  | table | postgres
+ public | customers | table | postgres
+ public | orders    | table | postgres
+ public | prices    | table | postgres
+ public | products  | table | postgres
+ public | suppliers | table | postgres
+(6 rows)
+
+commercedb=# \d orders
+                                            Table "public.orders"
+   Column    |            Type             | Collation | Nullable |                 Default                  
+-------------+-----------------------------+-----------+----------+------------------------------------------
+ order_id    | integer                     |           | not null | nextval('orders_order_id_seq'::regclass)
+ order_date  | timestamp without time zone |           |          | 
+ quantity    | integer                     |           | not null | 
+ customer_id | integer                     |           | not null | 
+ product_id  | integer                     |           | not null | 
+Indexes:
+    "orders_pkey" PRIMARY KEY, btree (order_id)
+Foreign-key constraints:
+    "orders_customer_id_fkey" FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
+    "orders_product_id_fkey" FOREIGN KEY (product_id) REFERENCES products(product_id)
+
+commercedb=# DO $$
+DECLARE
+    batch_size INT := 1000000;
+    batches INT := 300;
+BEGIN
+   FOR i IN 1..batches Loop 
+       INSERT INTO Orders (Order_date, Quantity, Customer_id, product_id)
+       SELECT
+           NOW() - (random() * interval '365 days') AS Order_date,                                  
+           (random() * 100)::INT + 1 AS Quantity,                                                      
+           (random() * (SELECT MAX(Customer_id) FROM Customers))::INT + 1 AS Customer_id,
+           (random() * (SELECT MAX(Product_id) FROM Products))::INT + 1 AS Product_id
+       FROM
+          generate_series(1, 300000000);  
+       COMMIT;
+    END LOOP;
+END $$;
+
+ERROR:  insert or update on table "orders" violates foreign key constraint "orders_product_id_fkey"
+DETAIL:  Key (product_id)=(15638875) is not present in table "products".
+CONTEXT:  SQL statement "INSERT INTO Orders (Order_date, Quantity, Customer_id, product_id)
+       SELECT
+           NOW() - (random() * interval '365 days') AS Order_date, 
+           (random() * 100)::INT + 1 AS Quantity,                  
+           (random() * (SELECT MAX(Customer_id) FROM Customers))::INT + 1 AS Customer_id,
+           (random() * (SELECT MAX(Product_id) FROM Products))::INT + 1 AS Product_id
+       FROM
+          generate_series(1, 300000000)"
+PL/pgSQL function inline_code_block line 7 at SQL statement
+commercedb=# 
+commercedb=# DO $$
+DECLARE
+    batch_size INT := 1000000;
+    batches INT := 300;
+BEGIN
+   FOR i IN 1..batches LOOP 
+       INSERT INTO Orders (Order_date, Quantity, Customer_id, product_id)
+       SELECT
+           NOW() - (random() * interval '365 days') AS Order_date,                      
+           (random() * 100)::INT + 1 AS Quantity,                                          
+           (random() * (SELECT MAX(Customer_id) FROM Customers))::INT + 1 AS Customer_id,
+           (SELECT Product_id FROM Products ORDER BY random() LIMIT 1) AS Product_id
+       FROM
+          generate_series(1, batch_size);  
+       COMMIT;
+    END LOOP;
+END $$;
+
+
+ERROR:  insert or update on table "orders" violates foreign key constraint "orders_customer_id_fkey"
+DETAIL:  Key (customer_id)=(30000001) is not present in table "customers".
+CONTEXT:  SQL statement "INSERT INTO Orders (Order_date, Quantity, Customer_id, product_id)
+       SELECT
+           NOW() - (random() * interval '365 days') AS Order_date,
+           (random() * 100)::INT + 1 AS Quantity,                  
+           (random() * (SELECT MAX(Customer_id) FROM Customers))::INT + 1 AS Customer_id,
+           (SELECT Product_id FROM Products ORDER BY random() LIMIT 1) AS Product_id
+       FROM
+          generate_series(1, batch_size)"
+PL/pgSQL function inline_code_block line 7 at SQL statement
+commercedb=# 
+commercedb=# 
+commercedb=# DO $$
+DECLARE
+    batch_size INT := 1000000;
+    batches INT := 300;
+BEGIN
+   FOR i IN 1..batches LOOP 
+       BEGIN
+           INSERT INTO Orders (Order_date, Quantity, Customer_id, product_id)
+           SELECT
+               NOW() - (random() * interval '365 days') AS Order_date,                                  
+               (random() * 100)::INT + 1 AS Quantity,                                             
+               (SELECT Customer_id FROM Customers ORDER BY random() LIMIT 1) AS Customer_id,
+               (SELECT Product_id FROM Products ORDER BY random() LIMIT 1) AS Product_id
+           FROM
+              generate_series(1, batch_size);  
+           COMMIT;
+        END;   
+    END LOOP;
+END $$;
+DO
+commercedb=# SELECT COUNT(*) FROM Orders;
+   count   
+-----------
+ 390000000
+(1 row)
+
+commercedb=# SELECT * FROM Orders ORDER BY Order_id LIMIT 10;
+ order_id  |         order_date         | quantity | customer_id | product_id 
+-----------+----------------------------+----------+-------------+------------
+ 300000001 | 2024-06-17 06:57:28.9801   |       95 |      342077 |   20061275
+ 300000002 | 2023-10-15 03:15:43.427656 |       61 |    17715687 |   20061275
+ 300000003 | 2023-12-21 09:42:45.170483 |       13 |    29670785 |   20061275
+ 300000004 | 2024-02-19 18:51:55.669054 |       75 |    13757292 |   20061275
+ 300000005 | 2024-07-04 04:56:31.251334 |       27 |    25267022 |   20061275
+ 300000006 | 2023-11-05 23:04:04.451457 |        1 |    11792174 |   20061275
+ 300000007 | 2023-12-06 08:53:12.345439 |       10 |     8181127 |   20061275
+ 300000008 | 2023-10-23 22:18:45.486806 |       89 |    19349846 |   20061275
+ 300000009 | 2024-05-07 16:31:16.402218 |       27 |     5153765 |   20061275
+ 300000010 | 2023-12-25 18:54:21.568847 |        2 |    18655160 |   20061275
+(10 rows)
+
+commercedb=# SELECT MIN(order_id), MAX(order_id) FROM Orders;
+    min    |    max    
+-----------+-----------
+ 300000001 | 691000000
+(1 row)
+
+commercedb=# EXPLAIN (ANALYZE, BUFFERS, VERBOSE) SELECT * FROM Orders ORDER BY Order_id LIMIT 10;
+                                                                    QUERY PLAN                                                                    
+--------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.57..0.91 rows=10 width=24) (actual time=0.055..0.067 rows=10 loops=1)
+   Output: order_id, order_date, quantity, customer_id, product_id
+   Buffers: shared hit=5
+   ->  Index Scan using orders_pkey on public.orders  (cost=0.57..13013820.37 rows=390035520 width=24) (actual time=0.053..0.061 rows=10 loops=1)
+         Output: order_id, order_date, quantity, customer_id, product_id
+         Buffers: shared hit=5
+ Planning Time: 0.196 ms
+ Execution Time: 0.120 ms
+(8 rows)
+
+commercedb=# EXPLAIN (ANALYZE, BUFFERS, VERBOSE) SELECT COUNT(*) FROM Orders;
+                                                                         QUERY PLAN                                                                         
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=4907435.21..4907435.22 rows=1 width=8) (actual time=62488.203..62498.642 rows=1 loops=1)
+   Output: count(*)
+   Buffers: shared hit=7486 read=2867514
+   ->  Gather  (cost=4907435.00..4907435.21 rows=2 width=8) (actual time=62486.891..62498.586 rows=3 loops=1)
+         Output: (PARTIAL count(*))
+         Workers Planned: 2
+         Workers Launched: 2
+         Buffers: shared hit=7486 read=2867514
+         ->  Partial Aggregate  (cost=4906435.00..4906435.01 rows=1 width=8) (actual time=62428.685..62428.686 rows=1 loops=3)
+               Output: PARTIAL count(*)
+               Buffers: shared hit=7486 read=2867514
+               Worker 0:  actual time=62399.938..62399.939 rows=1 loops=1
+                 JIT:
+                   Functions: 2
+                   Options: Inlining true, Optimization true, Expressions true, Deforming true
+                   Timing: Generation 0.253 ms, Inlining 113.019 ms, Optimization 4.111 ms, Emission 8.147 ms, Total 125.530 ms
+                 Buffers: shared hit=2232 read=950355
+               Worker 1:  actual time=62399.935..62399.937 rows=1 loops=1
+                 JIT:
+                   Functions: 2
+                   Options: Inlining true, Optimization true, Expressions true, Deforming true
+                   Timing: Generation 0.259 ms, Inlining 114.393 ms, Optimization 3.918 ms, Emission 7.591 ms, Total 126.160 ms
+                 Buffers: shared hit=2394 read=959762
+               ->  Parallel Seq Scan on public.orders  (cost=0.00..4500148.00 rows=162514800 width=0) (actual time=0.582..52253.948 rows=130000000 loops=3)
+                     Output: order_id, order_date, quantity, customer_id, product_id
+                     Buffers: shared hit=7486 read=2867514
+                     Worker 0:  actual time=0.870..52239.255 rows=129273304 loops=1
+                       Buffers: shared hit=2232 read=950355
+                     Worker 1:  actual time=0.863..52242.909 rows=130410354 loops=1
+                       Buffers: shared hit=2394 read=959762
+ Planning Time: 0.130 ms
+ JIT:
+   Functions: 8
+   Options: Inlining true, Optimization true, Expressions true, Deforming true
+   Timing: Generation 1.364 ms, Inlining 257.080 ms, Optimization 44.332 ms, Emission 31.707 ms, Total 334.483 ms
+ Execution Time: 62499.626 ms
+(36 rows)
+
+
+---Sql code for Orders table Now updated
+commercedb=# DROP TABLE IF EXISTS Orders;
+DROP TABLE
+commercedb=# \dt
+           List of relations
+ Schema |   Name    | Type  |  Owner   
+--------+-----------+-------+----------
+ public | accounts  | table | postgres
+ public | customers | table | postgres
+ public | prices    | table | postgres
+ public | products  | table | postgres
+ public | suppliers | table | postgres
+(5 rows)
+
+commercedb=# CREATE TABLE Orders (
+    Order_id SERIAL PRIMARY KEY,
+    Order_date TIMESTAMP,
+    Quantity INT NOT NULL,
+    Customer_id INT NOT NULL,
+    Product_id INT NOT NULL,
+    FOREIGN KEY (Customer_id) REFERENCES Customers(Customer_id),
+    FOREIGN KEY (Product_id) REFERENCES Products(Product_id)
+);
+CREATE TABLE
+commercedb=# DO $$
+DECLARE
+    batch_size INT := 1000000;
+    batches INT := 300;
+BEGIN
+   FOR i IN 1..batches LOOP 
+       INSERT INTO Orders (Order_date, Quantity, Customer_id, product_id)
+       SELECT
+           NOW() - (random() * interval '365 days') AS Order_date,                        
+           (random() * 100)::INT + 1 AS Quantity,                                               
+           (SELECT Customer_id FROM Customers ORDER BY random() LIMIT 1) AS Customer_id,
+           (SELECT Product_id FROM Products ORDER BY random() LIMIT 1) AS Product_id
+       FROM
+          generate_series(1, batch_size);    
+    END LOOP;
+END $$;
+DO
+commercedb=# SELECT COUNT(*) FROM Orders;
+   count   
+-----------
+ 300000000
+(1 row)
+
+commercedb=# SELECT * FROM orders ORDER BY order_id LIMIT 10;
+ order_id |         order_date         | quantity | customer_id | product_id 
+----------+----------------------------+----------+-------------+------------
+        1 | 2024-06-01 07:06:04.704536 |       77 |    22270926 |   26852766
+        2 | 2024-05-20 05:16:07.742605 |       92 |    22270926 |   26852766
+        3 | 2023-10-07 18:20:47.263589 |       36 |    22270926 |   26852766
+        4 | 2024-03-02 20:00:42.749155 |       80 |    22270926 |   26852766
+        5 | 2023-11-08 14:45:49.052055 |       44 |    22270926 |   26852766
+        6 | 2024-05-30 13:57:45.16799  |       78 |    22270926 |   26852766
+        7 | 2023-09-05 02:29:34.335956 |       79 |    22270926 |   26852766
+        8 | 2024-03-01 17:39:21.94576  |       90 |    22270926 |   26852766
+        9 | 2024-03-19 02:41:24.390653 |       19 |    22270926 |   26852766
+       10 | 2024-02-25 04:40:29.371175 |        9 |    22270926 |   26852766
+(10 rows)
+
+commercedb=# SELECT MIN(order_id), MAX(order_id) FROM Orders;
+ min |    max    
+-----+-----------
+   1 | 300000000
+(1 row)
+
+commercedb=# EXPLAIN (ANALYZE, BUFFERS, VERBOSE) SELECT MIN(order_id), MAX(order_id) FROM Orders;
+                                                                                  QUERY PLAN                                                                                  
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Result  (cost=1.20..1.21 rows=1 width=8) (actual time=0.150..0.155 rows=1 loops=1)
+   Output: $0, $1
+   Buffers: shared hit=10
+   InitPlan 1 (returns $0)
+     ->  Limit  (cost=0.57..0.60 rows=1 width=4) (actual time=0.102..0.104 rows=1 loops=1)
+           Output: orders.order_id
+           Buffers: shared hit=5
+           ->  Index Only Scan using orders_pkey on public.orders  (cost=0.57..8540246.25 rows=300000096 width=4) (actual time=0.100..0.100 rows=1 loops=1)
+                 Output: orders.order_id
+                 Index Cond: (orders.order_id IS NOT NULL)
+                 Heap Fetches: 0
+                 Buffers: shared hit=5
+   InitPlan 2 (returns $1)
+     ->  Limit  (cost=0.57..0.60 rows=1 width=4) (actual time=0.037..0.038 rows=1 loops=1)
+           Output: orders_1.order_id
+           Buffers: shared hit=5
+           ->  Index Only Scan Backward using orders_pkey on public.orders orders_1  (cost=0.57..8540246.25 rows=300000096 width=4) (actual time=0.035..0.036 rows=1 loops=1)
+                 Output: orders_1.order_id
+                 Index Cond: (orders_1.order_id IS NOT NULL)
+                 Heap Fetches: 0
+                 Buffers: shared hit=5
+ Planning Time: 0.495 ms
+ Execution Time: 0.235 ms
+(23 rows)
+
 
 

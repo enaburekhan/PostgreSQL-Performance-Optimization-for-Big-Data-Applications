@@ -92,10 +92,47 @@ CREATE TABLE Prices (
     FOREIGN KEY (Product_id) REFERENCES Products(Product_id)
 );
 
-
 -- Insert random data into the Prices table
 INSERT INTO Prices (Product_id, Price)
 SELECT
     Product_id,
     (random() * 1000)::NUMERIC(10, 2) AS Price -- Random Price between 0 and 1000
 FROM Products;
+
+
+-- Drop the Orders table if it already exists
+DROP TABLE IF EXISTS Orders;
+
+-- Create the Orders table
+CREATE TABLE Orders (
+    Order_id SERIAL PRIMARY KEY,
+    Order_date TIMESTAMP,
+    Quantity INT NOT NULL,
+    Customer_id INT NOT NULL,
+    Product_id INT NOT NULL,
+    FOREIGN KEY (Customer_id) REFERENCES Customers(Customer_id),
+    FOREIGN KEY (Product_id) REFERENCES Products(Product_id)
+);
+
+-- Insert random data into Orders table
+DO $$
+DECLARE
+    batch_size INT := 1000000;
+    batches INT := 300;
+BEGIN
+   FOR i IN 1..batches LOOP 
+       INSERT INTO Orders (Order_date, Quantity, Customer_id, product_id)
+       SELECT
+           NOW() - (random() * interval '365 days') AS Order_date, -- Random order date within the last year
+           (random() * 100)::INT + 1 AS Quantity,                  -- Random quantity between 1 and 100
+           (SELECT Customer_id FROM Customers ORDER BY random() LIMIT 1) AS Customer_id,
+           (SELECT Product_id FROM Products ORDER BY random() LIMIT 1) AS Product_id
+       FROM
+          generate_series(1, batch_size);    
+    END LOOP;
+END $$;
+
+/* The INSERT operation was wrapped in a single transaction to improve performance by reducing transaction overhead,
+   optimizing disk I/O, and making better use of database resources and avoid partial failures
+   . The data was broken into batches as shown in the script above. 
+*/
