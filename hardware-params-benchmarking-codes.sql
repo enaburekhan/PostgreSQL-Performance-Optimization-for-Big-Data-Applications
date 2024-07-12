@@ -11,6 +11,8 @@ generating data (client-side)...
 vacuuming...
 creating primary keys...
 done in 20.31 s (drop tables 0.00 s, create tables 0.02 s, client-side generate 13.04 s, vacuum 0.83 s, primary keys 6.42 s).
+
+
 (base) ericsson@ericsson-HP-EliteBook-820-G3 ~$ pgbench -c 10 -j 2 -T 60 commercedb
 Password: 
 pgbench (16.3 (Ubuntu 16.3-0ubuntu0.24.04.1))
@@ -27,6 +29,8 @@ number of failed transactions: 0 (0.000%)
 latency average = 3.602 ms
 initial connection time = 76.093 ms
 tps = 2776.555985 (without initial connection time)
+
+
 (base) ericsson@ericsson-HP-EliteBook-820-G3 ~$ pgbench -c 10 -j 2 -T 60 commercedb
 Password: 
 pgbench (16.3 (Ubuntu 16.3-0ubuntu0.24.04.1))
@@ -43,6 +47,8 @@ number of failed transactions: 0 (0.000%)
 latency average = 12.308 ms
 initial connection time = 98.411 ms
 tps = 812.484656 (without initial connection time)
+
+
 (base) ericsson@ericsson-HP-EliteBook-820-G3 ~$ pgbench -c 10 -j 2 -T 60 commercedb
 Password: 
 pgbench (16.3 (Ubuntu 16.3-0ubuntu0.24.04.1))
@@ -59,8 +65,9 @@ number of failed transactions: 0 (0.000%)
 latency average = 8.597 ms
 initial connection time = 99.982 ms
 tps = 1163.229736 (without initial connection time)
-(base) ericsson@ericsson-HP-EliteBook-820-G3 ~$ 
 
+
+(base) ericsson@ericsson-HP-EliteBook-820-G3 ~$ sudo systemctl restart postgresql
 
 
 ---After Tuning the PostgreSQL Configuration Parameters
@@ -81,6 +88,8 @@ number of failed transactions: 0 (0.000%)
 latency average = 7.296 ms
 initial connection time = 110.801 ms
 tps = 1370.619997 (without initial connection time)
+
+
 (base) ericsson@ericsson-HP-EliteBook-820-G3 ~$ pgbench -c 10 -j 2 -T 60 commercedb
 Password: 
 pgbench (16.3 (Ubuntu 16.3-0ubuntu0.24.04.1))
@@ -97,6 +106,8 @@ number of failed transactions: 0 (0.000%)
 latency average = 4.771 ms
 initial connection time = 72.806 ms
 tps = 2096.092572 (without initial connection time)
+
+
 (base) ericsson@ericsson-HP-EliteBook-820-G3 ~$ pgbench -c 10 -j 2 -T 60 commercedb
 Password: 
 pgbench (16.3 (Ubuntu 16.3-0ubuntu0.24.04.1))
@@ -113,3 +124,4 @@ number of failed transactions: 0 (0.000%)
 latency average = 4.285 ms
 initial connection time = 87.208 ms
 tps = 2333.976659 (without initial connection time)
+
