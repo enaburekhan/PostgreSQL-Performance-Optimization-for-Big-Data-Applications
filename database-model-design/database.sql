@@ -106,12 +106,10 @@ DROP TABLE IF EXISTS Orders;
 -- Create the Orders table
 CREATE TABLE Orders (
     Order_id SERIAL PRIMARY KEY,
-    Order_date TIMESTAMP,
+    Order_date TIMESTAMP WITHOUT TIME ZONE,
     Quantity INT NOT NULL,
     Customer_id INT NOT NULL,
-    Product_id INT NOT NULL,
-    FOREIGN KEY (Customer_id) REFERENCES Customers(Customer_id),
-    FOREIGN KEY (Product_id) REFERENCES Products(Product_id)
+    FOREIGN KEY (Customer_id) REFERENCES Customers(Customer_id)
 );
 
 -- Insert random data into Orders table
@@ -121,12 +119,11 @@ DECLARE
     batches INT := 300;
 BEGIN
    FOR i IN 1..batches LOOP 
-       INSERT INTO Orders (Order_date, Quantity, Customer_id, product_id)
+       INSERT INTO Orders (Order_date, Quantity, Customer_id)
        SELECT
            NOW() - (random() * interval '365 days') AS Order_date, -- Random order date within the last year
            (random() * 100)::INT + 1 AS Quantity,                  -- Random quantity between 1 and 100
-           (SELECT Customer_id FROM Customers ORDER BY random() LIMIT 1) AS Customer_id,
-           (SELECT Product_id FROM Products ORDER BY random() LIMIT 1) AS Product_id
+           (SELECT Customer_id FROM Customers ORDER BY random() LIMIT 1) AS Customer_id
        FROM
           generate_series(1, batch_size);    
     END LOOP;
@@ -136,3 +133,35 @@ END $$;
    optimizing disk I/O, and making better use of database resources and avoid partial failures
    . The data was broken into batches as shown in the script above. 
 */
+
+
+-- Drop the Orders_Products table if it already exists
+DROP TABLE IF EXISTS Orders_Products;
+
+-- Create the Orders_Products table
+CREATE TABLE Orders_Products(
+    Order_id INT NOT NULL,
+    Product_id INT NOT NULL,
+    FOREIGN KEY (Order_id) REFERENCES Orders(Order_id),
+    FOREIGN KEY (Product_id) REFERENCES Products(Product_id)
+);
+
+-- Insert random parings into Orders_Products table ensuring no duplicates
+DO $$
+DECLARE
+    batch_size INT := 1000000; -- Number of rows to insert in each batch
+    total_rows INT := 30000000; -- Total rows to insert
+    i INT := 0;
+BEGIN
+    WHILE i < total_rows LOOP
+        INSERT INTO Orders_Products (Order_id, Product_id)
+        SELECT 
+            (SELECT Order_id FROM Orders OFFSET floor(random() * 300000000) LIMIT 1),
+            (SELECT Product_id FROM Products OFFSET floor(random() * 10000000) LIMIT 1)
+        FROM generate_series(1, batch_size);    
+        i := i + batch_size;
+    END LOOP;
+END $$;        
+          
+
+
