@@ -139,29 +139,48 @@ END $$;
 DROP TABLE IF EXISTS Orders_Products;
 
 -- Create the Orders_Products table
-CREATE TABLE Orders_Products(
-    Order_id INT NOT NULL,
-    Product_id INT NOT NULL,
-    FOREIGN KEY (Order_id) REFERENCES Orders(Order_id),
-    FOREIGN KEY (Product_id) REFERENCES Products(Product_id)
-);
+-- CREATE TABLE Orders_Products(
+--     Order_id INT NOT NULL,
+--     Product_id INT NOT NULL,
+--     FOREIGN KEY (Order_id) REFERENCES Orders(Order_id),
+--     FOREIGN KEY (Product_id) REFERENCES Products(Product_id)
+-- );
 
 -- Insert random parings into Orders_Products table ensuring no duplicates
-DO $$
-DECLARE
-    batch_size INT := 1000000; -- Number of rows to insert in each batch
-    total_rows INT := 30000000; -- Total rows to insert
-    i INT := 0;
-BEGIN
-    WHILE i < total_rows LOOP
-        INSERT INTO Orders_Products (Order_id, Product_id)
-        SELECT 
-            (SELECT Order_id FROM Orders OFFSET floor(random() * 300000000) LIMIT 1),
-            (SELECT Product_id FROM Products OFFSET floor(random() * 10000000) LIMIT 1)
-        FROM generate_series(1, batch_size);    
-        i := i + batch_size;
-    END LOOP;
-END $$;        
-          
+-- DO $$
+-- DECLARE
+--     batch_size INT := 1000000; -- Number of rows to insert in each batch
+--     total_rows INT := 30000000; -- Total rows to insert
+--     i INT := 0;
+-- BEGIN
+--     WHILE i < total_rows LOOP
+--         INSERT INTO Orders_Products (Order_id, Product_id)
+--         SELECT 
+--             (SELECT Order_id FROM Orders OFFSET floor(random() * 300000000) LIMIT 1),
+--             (SELECT Product_id FROM Products OFFSET floor(random() * 10000000) LIMIT 1)
+--         FROM generate_series(1, batch_size);    
+--         i := i + batch_size;
+--     END LOOP;
+-- END $$;  
 
 
+
+-- Create Orders_Products table
+CREATE TABLE Orders_Products AS
+SELECT
+    generate_series(1, 30000000) AS Id, 
+    (SELECT Order_id FROM Orders OFFSET floor(random() * 300000000) LIMIT 1) AS Order_id,
+    (SELECT Product_id FROM Products OFFSET floor(random() * 10000000) LIMIT 1) AS Product_id;         
+
+
+-- Add primary key constraint
+ALTER TABLE Orders_Products
+ADD CONSTRAINT orders_products_pkey PRIMARY KEY (Id);
+
+-- Add foreign key constraint for Order_id
+ALTER TABLE Orders_Products
+ADD CONSTRAINT orders_products_order_id_fkey FOREIGN KEY (Order_id) REFERENCES Orders (Order_id);
+
+--Add foreign key constraint for product_id
+ALTER TABLE Orders_Products
+ADD CONSTRAINT orders_products_product_id_fkey FOREIGN KEY (Product_id) REFERENCES Products (Product_id);

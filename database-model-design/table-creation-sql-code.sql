@@ -1170,102 +1170,38 @@ commercedb=# EXPLAIN (ANALYZE, BUFFERS, VERBOSE) SELECT MIN(order_id), MAX(order
 
 -- SQL Code for Orders_Products table
 
-(base) ericsson@ericsson-HP-EliteBook-820-G3 ~$ psql -U postgres commercedb
+base) ericsson@ericsson-HP-EliteBook-820-G3 ~$ psql -U postgres commercedb;
 Password for user postgres: 
 psql (16.3 (Ubuntu 16.3-0ubuntu0.24.04.1))
 Type "help" for help.
 
-commercedb=# DROP TABLE IF EXISTS Orders_Products;
-DROP TABLE
-commercedb=# \dt
-              List of relations
- Schema |       Name       | Type  |  Owner   
---------+------------------+-------+----------
- public | accounts         | table | postgres
- public | customers        | table | postgres
- public | orders           | table | postgres
- public | pgbench_accounts | table | ericsson
- public | pgbench_branches | table | ericsson
- public | pgbench_history  | table | ericsson
- public | pgbench_tellers  | table | ericsson
- public | prices           | table | postgres
- public | products         | table | postgres
- public | suppliers        | table | postgres
+commercedb=# CREATE TABLE Orders_Products AS
+SELECT
+    generate_series(1, 30000000) AS Id, 
+    (SELECT Order_id FROM Orders OFFSET floor(random() * 300000000) LIMIT 1) AS Order_id,
+    (SELECT Product_id FROM Products OFFSET floor(random() * 10000000) LIMIT 1) AS Product_id;
+SELECT 30000000
+commercedb=# SELECT COUNT(*) FROM Orders_Products;
+  count   
+----------
+ 30000000
+(1 row)
+
+commercedb=# SELECT * FROM Orders_Products ORDER BY Order_id LIMIT 10;
+ id | order_id | product_id 
+----+----------+------------
+  2 | 53982066 |   23591601
+  3 | 53982066 |   23591601
+  4 | 53982066 |   23591601
+  5 | 53982066 |   23591601
+  6 | 53982066 |   23591601
+  7 | 53982066 |   23591601
+  8 | 53982066 |   23591601
+  9 | 53982066 |   23591601
+ 10 | 53982066 |   23591601
+  1 | 53982066 |   23591601
 (10 rows)
 
-commercedb=# CREATE TABLE Orders_Products(
-    Order_id INT NOT NULL,
-    Product_id INT NOT NULL,
-    PRIMARY KEY (Order_id, Product_id),
-    FOREIGN KEY (Order_id) REFERENCES Orders(Order_id),
-    FOREIGN KEY (Product_id) REFERENCES Products(Product_id)
-);
-CREATE TABLE
-commercedb=# \dt
-              List of relations
- Schema |       Name       | Type  |  Owner   
---------+------------------+-------+----------
- public | accounts         | table | postgres
- public | customers        | table | postgres
- public | orders           | table | postgres
- public | orders_products  | table | postgres
- public | pgbench_accounts | table | ericsson
- public | pgbench_branches | table | ericsson
- public | pgbench_history  | table | ericsson
- public | pgbench_tellers  | table | ericsson
- public | prices           | table | postgres
- public | products         | table | postgres
- public | suppliers        | table | postgres
-(11 rows)
-
-commercedb=# DO $$
-DECLARE
-    batch_size INT := 1000000; -- Number of rows to insert in each batch
-    total_rows INT := 30000000; -- Total rows to insert
-    i INT := 0;
-BEGIN
-    WHILE i < total_rows LOOP
-        INSERT INTO Orders_Products (Order_id, Product_id)
-        SELECT 
-            (SELECT Order_id FROM Orders OFFSET floor(random() * 300000000) LIMIT 1),
-            (SELECT Product_id FROM Products OFFSET floor(random() * 10000000) LIMIT 1)
-        FROM generate_series(1, batch_size);    
-        i := i + batch_size;
-    END LOOP;
-END $$;   
-ERROR:  duplicate key value violates unique constraint "orders_products_pkey"
-DETAIL:  Key (order_id, product_id)=(116209618, 23496919) already exists.
-CONTEXT:  SQL statement "INSERT INTO Orders_Products (Order_id, Product_id)
-        SELECT 
-            (SELECT Order_id FROM Orders OFFSET floor(random() * 300000000) LIMIT 1),
-            (SELECT Product_id FROM Products OFFSET floor(random() * 10000000) LIMIT 1)
-        FROM generate_series(1, batch_size)"
-PL/pgSQL function inline_code_block line 8 at SQL statement
-commercedb=# DROP TABLE IF EXISTS Orders_Products;
-DROP TABLE
-commercedb=# \dt                                
-              List of relations
- Schema |       Name       | Type  |  Owner   
---------+------------------+-------+----------
- public | accounts         | table | postgres
- public | customers        | table | postgres
- public | orders           | table | postgres
- public | pgbench_accounts | table | ericsson
- public | pgbench_branches | table | ericsson
- public | pgbench_history  | table | ericsson
- public | pgbench_tellers  | table | ericsson
- public | prices           | table | postgres
- public | products         | table | postgres
- public | suppliers        | table | postgres
-(10 rows)
-
-commercedb=# CREATE TABLE Orders_Products(
-    Order_id INT NOT NULL,
-    Product_id INT NOT NULL,
-    FOREIGN KEY (Order_id) REFERENCES Orders(Order_id),
-    FOREIGN KEY (Product_id) REFERENCES Products(Product_id)
-);
-CREATE TABLE
 commercedb=# \dt
               List of relations
  Schema |       Name       | Type  |  Owner   
@@ -1287,66 +1223,67 @@ commercedb=# \d orders_products
             Table "public.orders_products"
    Column   |  Type   | Collation | Nullable | Default 
 ------------+---------+-----------+----------+---------
- order_id   | integer |           | not null | 
- product_id | integer |           | not null | 
+ id         | integer |           |          | 
+ order_id   | integer |           |          | 
+ product_id | integer |           |          | 
+
+commercedb=# ALTER TABLE Orders_Products
+ADD CONSTRAINT orders_products_pkey PRIMARY KEY (Id);
+ALTER TABLE
+commercedb=# \d orders_products
+            Table "public.orders_products"
+   Column   |  Type   | Collation | Nullable | Default 
+------------+---------+-----------+----------+---------
+ id         | integer |           | not null | 
+ order_id   | integer |           |          | 
+ product_id | integer |           |          | 
+Indexes:
+    "orders_products_pkey" PRIMARY KEY, btree (id)
+
+commercedb=# ALTER TABLE Orders_Products
+ADD CONSTRAINT orders_products_order_id_fkey FOREIGN KEY (Order_id) REFERENCES Orders (Order_id);
+ALTER TABLE
+commercedb=# \d orders_products
+            Table "public.orders_products"
+   Column   |  Type   | Collation | Nullable | Default 
+------------+---------+-----------+----------+---------
+ id         | integer |           | not null | 
+ order_id   | integer |           |          | 
+ product_id | integer |           |          | 
+Indexes:
+    "orders_products_pkey" PRIMARY KEY, btree (id)
+Foreign-key constraints:
+    "orders_products_order_id_fkey" FOREIGN KEY (order_id) REFERENCES orders(order_id)
+
+commercedb=# ALTER TABLE Orders_Products
+ADD CONSTRAINT orders_products_product_id_fkey FOREIGN KEY (Product_id) REFERENCES Products (Product_id);
+ALTER TABLE
+commercedb=# \d orders_products
+            Table "public.orders_products"
+   Column   |  Type   | Collation | Nullable | Default 
+------------+---------+-----------+----------+---------
+ id         | integer |           | not null | 
+ order_id   | integer |           |          | 
+ product_id | integer |           |          | 
+Indexes:
+    "orders_products_pkey" PRIMARY KEY, btree (id)
 Foreign-key constraints:
     "orders_products_order_id_fkey" FOREIGN KEY (order_id) REFERENCES orders(order_id)
     "orders_products_product_id_fkey" FOREIGN KEY (product_id) REFERENCES products(product_id)
 
-commercedb=# DO $$
-DECLARE
-    batch_size INT := 1000000; -- Number of rows to insert in each batch
-    total_rows INT := 30000000; -- Total rows to insert
-    i INT := 0;
-BEGIN
-    WHILE i < total_rows LOOP
-        INSERT INTO Orders_Products (Order_id, Product_id)
-        SELECT 
-            (SELECT Order_id FROM Orders OFFSET floor(random() * 300000000) LIMIT 1),
-            (SELECT Product_id FROM Products OFFSET floor(random() * 10000000) LIMIT 1)
-        FROM generate_series(1, batch_size);    
-        i := i + batch_size;
-    END LOOP;
-END $$;        
-DO
-commercedb=# SELECT COUNT(*) FROM Orders_Products;
-  count   
-----------
- 30000000
-(1 row)
-
-commercedb=# SELECT * FROM Orders_Products ORDER BY Order_id LIMIT 10;
- order_id | product_id 
-----------+------------
- 52841733 |   21249457
- 52841733 |   21249457
- 52841733 |   21249457
- 52841733 |   21249457
- 52841733 |   21249457
- 52841733 |   21249457
- 52841733 |   21249457
- 52841733 |   21249457
- 52841733 |   21249457
- 52841733 |   21249457
-(10 rows)
-
-commercedb=# SELECT * FROM Orders_Products ORDER BY Order_id LIMIT 10 DESC;
-ERROR:  syntax error at or near "DESC"
-LINE 1: ...LECT * FROM Orders_Products ORDER BY Order_id LIMIT 10 DESC;
-                                                                  ^
-commercedb=# SELECT * FROM Orders_Products ORDER BY Order_id DESC LIMIT 10;
- order_id  | product_id 
------------+------------
- 292673107 |   22004388
- 292673107 |   22004388
- 292673107 |   22004388
- 292673107 |   22004388
- 292673107 |   22004388
- 292673107 |   22004388
- 292673107 |   22004388
- 292673107 |   22004388
- 292673107 |   22004388
- 292673107 |   22004388
+commercedb=# SELECT * FROM Orders_Products ORDER BY Id DESC LIMIT 10;
+    id    | order_id | product_id 
+----------+----------+------------
+ 30000000 | 53982066 |   23591601
+ 29999999 | 53982066 |   23591601
+ 29999998 | 53982066 |   23591601
+ 29999997 | 53982066 |   23591601
+ 29999996 | 53982066 |   23591601
+ 29999995 | 53982066 |   23591601
+ 29999994 | 53982066 |   23591601
+ 29999993 | 53982066 |   23591601
+ 29999992 | 53982066 |   23591601
+ 29999991 | 53982066 |   23591601
 (10 rows)
 
 
