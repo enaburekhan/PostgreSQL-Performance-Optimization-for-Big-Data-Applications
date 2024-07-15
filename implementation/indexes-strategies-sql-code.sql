@@ -139,3 +139,107 @@ commercedb=# EXPLAIN (ANALYZE, BUFFERS, VERBOSE) SELECT Order_id, Order_date, Qu
    Timing: Generation 1.634 ms, Inlining 198.750 ms, Optimization 39.944 ms, Emission 23.158 ms, Total 263.486 ms
  Execution Time: 409526.911 ms
 (28 rows)
+
+
+-- Optimization processes
+
+commercedb=# \d Orders
+                                            Table "public.orders"
+   Column    |            Type             | Collation | Nullable |                 Default                  
+-------------+-----------------------------+-----------+----------+------------------------------------------
+ order_id    | integer                     |           | not null | nextval('orders_order_id_seq'::regclass)
+ order_date  | timestamp without time zone |           |          | 
+ quantity    | integer                     |           | not null | 
+ customer_id | integer                     |           | not null | 
+Indexes:
+    "orders_pkey" PRIMARY KEY, btree (order_id)
+Foreign-key constraints:
+    "orders_customer_id_fkey" FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
+Referenced by:
+    TABLE "orders_products" CONSTRAINT "orders_products_order_id_fkey" FOREIGN KEY (order_id) REFERENCES orders(order_id)
+
+commercedb=# CREATE INDEX idx_orders_customer_id_order_date ON Orders (Customer_id, Order_date);
+CREATE INDEX
+commercedb=# \d Orders
+                                            Table "public.orders"
+   Column    |            Type             | Collation | Nullable |                 Default                  
+-------------+-----------------------------+-----------+----------+------------------------------------------
+ order_id    | integer                     |           | not null | nextval('orders_order_id_seq'::regclass)
+ order_date  | timestamp without time zone |           |          | 
+ quantity    | integer                     |           | not null | 
+ customer_id | integer                     |           | not null | 
+Indexes:
+    "orders_pkey" PRIMARY KEY, btree (order_id)
+    "idx_orders_customer_id_order_date" btree (customer_id, order_date)
+Foreign-key constraints:
+    "orders_customer_id_fkey" FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
+Referenced by:
+    TABLE "orders_products" CONSTRAINT "orders_products_order_id_fkey" FOREIGN KEY (order_id) REFERENCES orders(order_id)
+
+commercedb=# SELECT indexname, indexdef FROM pg_indexes WHERE tablename = 'orders';
+             indexname             |                                               indexdef                                                
+-----------------------------------+-------------------------------------------------------------------------------------------------------
+ orders_pkey                       | CREATE UNIQUE INDEX orders_pkey ON public.orders USING btree (order_id)
+ idx_orders_customer_id_order_date | CREATE INDEX idx_orders_customer_id_order_date ON public.orders USING btree (customer_id, order_date)
+(2 rows)
+
+
+-- After Optimization
+
+-- Try1
+
+commercedb=# SELECT Order_id, Order_date, Quantity, Customer_id FROM Orders WHERE Customer_id = 13252175 AND Order_date = '2024-04-11 05:08:13.33689';
+ order_id |        order_date         | quantity | customer_id 
+----------+---------------------------+----------+-------------
+        7 | 2024-04-11 05:08:13.33689 |       72 |    13252175
+(1 row)
+
+commercedb=# EXPLAIN (ANALYZE, BUFFERS, VERBOSE) SELECT Order_id, Order_date, Quantity, Customer_id FROM Orders WHERE Customer_id = 13252175 AND Order_date = '2024-04-11 05:08:13.33689';
+                                                                    QUERY PLAN                                                                    
+--------------------------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using idx_orders_customer_id_order_date on public.orders  (cost=0.57..8.59 rows=1 width=20) (actual time=0.096..0.101 rows=1 loops=1)
+   Output: order_id, order_date, quantity, customer_id
+   Index Cond: ((orders.customer_id = 13252175) AND (orders.order_date = '2024-04-11 05:08:13.33689'::timestamp without time zone))
+   Buffers: shared hit=5
+ Planning Time: 0.159 ms
+ Execution Time: 0.143 ms
+(6 rows)
+
+
+-- Try 2
+
+commercedb=# SELECT Order_id, Order_date, Quantity, Customer_id FROM Orders WHERE Customer_id = 13252175 AND Order_date = '2024-04-11 05:08:13.33689';
+ order_id |        order_date         | quantity | customer_id 
+----------+---------------------------+----------+-------------
+        7 | 2024-04-11 05:08:13.33689 |       72 |    13252175
+(1 row)
+
+commercedb=# EXPLAIN (ANALYZE, BUFFERS, VERBOSE) SELECT Order_id, Order_date, Quantity, Customer_id FROM Orders WHERE Customer_id = 13252175 AND Order_date = '2024-04-11 05:08:13.33689';
+                                                                    QUERY PLAN                                                                    
+--------------------------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using idx_orders_customer_id_order_date on public.orders  (cost=0.57..8.59 rows=1 width=20) (actual time=0.032..0.034 rows=1 loops=1)
+   Output: order_id, order_date, quantity, customer_id
+   Index Cond: ((orders.customer_id = 13252175) AND (orders.order_date = '2024-04-11 05:08:13.33689'::timestamp without time zone))
+   Buffers: shared hit=5
+ Planning Time: 0.080 ms
+ Execution Time: 0.050 ms
+(6 rows)
+
+-- Try3
+
+commercedb=# SELECT Order_id, Order_date, Quantity, Customer_id FROM Orders WHERE Customer_id = 13252175 AND Order_date = '2024-04-11 05:08:13.33689';
+ order_id |        order_date         | quantity | customer_id 
+----------+---------------------------+----------+-------------
+        7 | 2024-04-11 05:08:13.33689 |       72 |    13252175
+(1 row)
+
+commercedb=# EXPLAIN (ANALYZE, BUFFERS, VERBOSE) SELECT Order_id, Order_date, Quantity, Customer_id FROM Orders WHERE Customer_id = 13252175 AND Order_date = '2024-04-11 05:08:13.33689';
+                                                                    QUERY PLAN                                                                    
+--------------------------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using idx_orders_customer_id_order_date on public.orders  (cost=0.57..8.59 rows=1 width=20) (actual time=0.038..0.041 rows=1 loops=1)
+   Output: order_id, order_date, quantity, customer_id
+   Index Cond: ((orders.customer_id = 13252175) AND (orders.order_date = '2024-04-11 05:08:13.33689'::timestamp without time zone))
+   Buffers: shared hit=5
+ Planning Time: 0.152 ms
+ Execution Time: 0.070 ms
+(6 rows)
