@@ -28,20 +28,6 @@ ORDER BY o.order_date DESC LIMIT 10;
 (10 rows)
 
 
-        customer_name            |           contact_info           | --- 
-----------------------------------+----------------------------------+
- a2b3435aaa80aa2d902f1d2b369c2278 | db77d5d2bbd71d08e40400f4063f2498 |
- a2b3435aaa80aa2d902f1d2b369c2278 | db77d5d2bbd71d08e40400f4063f2498 | 
- a2b3435aaa80aa2d902f1d2b369c2278 | db77d5d2bbd71d08e40400f4063f2498 | 
- a2b3435aaa80aa2d902f1d2b369c2278 | db77d5d2bbd71d08e40400f4063f2498 | 
- a2b3435aaa80aa2d902f1d2b369c2278 | db77d5d2bbd71d08e40400f4063f2498 | 
- a2b3435aaa80aa2d902f1d2b369c2278 | db77d5d2bbd71d08e40400f4063f2498 | 
- a2b3435aaa80aa2d902f1d2b369c2278 | db77d5d2bbd71d08e40400f4063f2498 | 
- a2b3435aaa80aa2d902f1d2b369c2278 | db77d5d2bbd71d08e40400f4063f2498 | 
- a2b3435aaa80aa2d902f1d2b369c2278 | db77d5d2bbd71d08e40400f4063f2498 | 
- a2b3435aaa80aa2d902f1d2b369c2278 | db77d5d2bbd71d08e40400f4063f2498 | 
-
-
 
 --Try1
                                                                           QUERY PLAN                                                                          
