@@ -30,6 +30,16 @@ ORDER BY o.order_date DESC LIMIT 10;
 
 
 --Try1
+commercedb=# EXPLAIN (ANALYZE, BUFFERS) SELECT c.customer_name, c.contact_info, o.order_id, o.order_date, o.quantity, p.product_name, pr.price, s.supplier_name, a.balance
+FROM customers c
+JOIN orders o ON c.customer_id = o.customer_id
+JOIN accounts a ON c.customer_id = a.customer_id
+JOIN products p ON p.supplier_id = (SELECT supplier_id FROM suppliers WHERE supplier_name = '0202521e5b58ac90e003a8d0025621c4' LIMIT 1)
+JOIN prices pr ON pr.product_id = p.product_id
+JOIN suppliers s ON p.supplier_id = s.supplier_id
+WHERE o.order_date = '2023-11-21 16:31:21.334746'
+  AND pr.price > (SELECT AVG(price) FROM prices)
+ORDER BY o.order_date DESC LIMIT 10;
                                                                           QUERY PLAN                                                                          
 --------------------------------------------------------------------------------------------------------------------------------------------------------------
  Limit  (cost=257167.54..1311031.52 rows=10 width=160) (actual time=15686.259..39531.970 rows=10 loops=1)
@@ -107,7 +117,17 @@ ORDER BY o.order_date DESC LIMIT 10;
 
 
 -- Try2
-                                                                          QUERY PLAN                                                                          
+commercedb=# EXPLAIN (ANALYZE, BUFFERS) SELECT c.customer_name, c.contact_info, o.order_id, o.order_date, o.quantity, p.product_name, pr.price, s.supplier_name, a.balance
+FROM customers c
+JOIN orders o ON c.customer_id = o.customer_id
+JOIN accounts a ON c.customer_id = a.customer_id
+JOIN products p ON p.supplier_id = (SELECT supplier_id FROM suppliers WHERE supplier_name = '0202521e5b58ac90e003a8d0025621c4' LIMIT 1)
+JOIN prices pr ON pr.product_id = p.product_id
+JOIN suppliers s ON p.supplier_id = s.supplier_id
+WHERE o.order_date = '2023-11-21 16:31:21.334746'
+  AND pr.price > (SELECT AVG(price) FROM prices)
+ORDER BY o.order_date DESC LIMIT 10;
+                                                                        QUERY PLAN                                                                          
 --------------------------------------------------------------------------------------------------------------------------------------------------------------
  Limit  (cost=257167.54..1311031.52 rows=10 width=160) (actual time=18375.949..41675.649 rows=10 loops=1)
    Buffers: shared hit=489529 read=1622617
@@ -185,7 +205,16 @@ ORDER BY o.order_date DESC LIMIT 10;
 
 
 --Try3
-
+commercedb=# EXPLAIN (ANALYZE, BUFFERS) SELECT c.customer_name, c.contact_info, o.order_id, o.order_date, o.quantity, p.product_name, pr.price, s.supplier_name, a.balance
+FROM customers c
+JOIN orders o ON c.customer_id = o.customer_id
+JOIN accounts a ON c.customer_id = a.customer_id
+JOIN products p ON p.supplier_id = (SELECT supplier_id FROM suppliers WHERE supplier_name = '0202521e5b58ac90e003a8d0025621c4' LIMIT 1)
+JOIN prices pr ON pr.product_id = p.product_id
+JOIN suppliers s ON p.supplier_id = s.supplier_id
+WHERE o.order_date = '2023-11-21 16:31:21.334746'
+  AND pr.price > (SELECT AVG(price) FROM prices)
+ORDER BY o.order_date DESC LIMIT 10;
                                                                           QUERY PLAN                                                                          
 --------------------------------------------------------------------------------------------------------------------------------------------------------------
  Limit  (cost=257167.54..1311031.52 rows=10 width=160) (actual time=33920.869..34576.904 rows=10 loops=1)
@@ -230,3 +259,511 @@ ORDER BY o.order_date DESC LIMIT 10;
                            Index Cond: (customer_id = c.customer_id)
                            Buffers: shared hit=4
                ->  Index Scan using suppliers_pkey on suppliers s  (cost=0.29..8.31 rows=1 width=37) (actual time=0.006..0.006 rows=1 loops=1)
+                    Index Cond: (supplier_id = $0)
+                     Buffers: shared hit=3
+         ->  Gather  (cost=146541.89..256330.43 rows=34 width=43) (actual time=1688.788..2344.647 rows=10 loops=1)
+               Workers Planned: 2
+               Params Evaluated: $0, $2
+               Workers Launched: 2
+               Buffers: shared hit=182303
+               ->  Parallel Hash Join  (cost=145541.89..255327.03 rows=14 width=43) (actual time=557.082..1149.323 rows=12 loops=3)
+                     Hash Cond: (pr.product_id = p.product_id)
+                     Buffers: shared hit=128248
+                     ->  Parallel Seq Scan on prices pr  (cost=0.00..106139.24 rows=1388913 width=10) (actual time=0.038..495.507 rows=1068999 loops=3)
+                           Filter: (price > $2)
+                           Rows Removed by Filter: 1069201
+                           Buffers: shared hit=34674
+                     ->  Parallel Hash  (cost=145541.36..145541.36 rows=42 width=41) (actual time=529.957..529.958 rows=34 loops=3)
+                           Buckets: 1024  Batches: 1  Memory Usage: 0kB
+                           Buffers: shared hit=93458
+                           ->  Parallel Seq Scan on products p  (cost=0.00..145541.36 rows=42 width=41) (actual time=234.956..529.799 rows=34 loops=3)
+                                 Filter: (supplier_id = $0)
+                                 Rows Removed by Filter: 3333300
+                                 Buffers: shared hit=93458
+ Planning:
+   Buffers: shared hit=463
+ Planning Time: 17.543 ms
+ JIT:
+   Functions: 114
+   Options: Inlining true, Optimization true, Expressions true, Deforming true
+   Timing: Generation 12.981 ms, Inlining 885.516 ms, Optimization 501.204 ms, Emission 363.491 ms, Total 1763.193 ms
+ Execution Time: 34701.184 ms
+(71 rows)
+
+
+
+-- optimization
+
+-- commercedb=# EXPLAIN (ANALYZE, BUFFERS, VERBOSE) WITH supplier_cte AS (
+--     SELECT supplier_id
+--     FROM suppliers
+--     WHERE supplier_name = '0202521e5b58ac90e003a8d0025621c4'
+--     LIMIT 1
+-- ),
+-- avg_price_cte AS (
+--     SELECT AVG(price) AS avg_price
+--     FROM prices
+-- ),
+-- filtered_orders_cte AS (
+--     SELECT o.order_id, o.customer_id, o.order_date, o.quantity
+--     FROM orders o
+--     WHERE o.order_date = '2023-11-21 16:31:21.334746'
+-- ),
+-- filtered_prices_cte AS (
+--     SELECT pr.product_id, pr.price
+--     FROM prices pr, avg_price_cte
+--     WHERE pr.price > avg_price_cte.avg_price
+-- )
+-- SELECT c.customer_name, c.contact_info, o.order_id, o.order_date, o.quantity, 
+--        p.product_name, pr.price, s.supplier_name, a.balance
+-- FROM customers c
+-- JOIN filtered_orders_cte o ON c.customer_id = o.customer_id
+-- JOIN accounts a ON c.customer_id = a.customer_id
+-- JOIN products p ON p.supplier_id = (SELECT supplier_id FROM supplier_cte)
+-- JOIN filtered_prices_cte pr ON pr.product_id = p.product_id
+-- JOIN suppliers s ON p.supplier_id = s.supplier_id
+-- ORDER BY o.order_date DESC
+-- LIMIT 10;
+
+-- Ensure indexes exist
+CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON Orders (Customer_id);
+CREATE INDEX IF NOT EXISTS idx_orders_order_date ON Orders (Order_date);
+CREATE INDEX IF NOT EXISTS idx_accounts_customer_id ON Accounts (Customer_id);
+CREATE INDEX IF NOT EXISTS idx_prices_product_id ON prices (Product_id);
+CREATE INDEX IF NOT EXISTS idx_products_supplier_id ON Products (Supplier_id);
+
+commercedb=# CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON Orders (Customer_id);
+CREATE INDEX
+commercedb=# \d orders
+                                            Table "public.orders"
+   Column    |            Type             | Collation | Nullable |                 Default                  
+-------------+-----------------------------+-----------+----------+------------------------------------------
+ order_id    | integer                     |           | not null | nextval('orders_order_id_seq'::regclass)
+ order_date  | timestamp without time zone |           |          | 
+ quantity    | integer                     |           | not null | 
+ customer_id | integer                     |           | not null | 
+Indexes:
+    "orders_pkey" PRIMARY KEY, btree (order_id)
+    "idx_orders_customer_id" btree (customer_id)
+    "idx_orders_customer_id_order_date" btree (customer_id, order_date)
+Foreign-key constraints:
+    "orders_customer_id_fkey" FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
+Referenced by:
+    TABLE "orders_products" CONSTRAINT "orders_products_order_id_fkey" FOREIGN KEY (order_id) REFERENCES orders(order_id)
+
+commercedb=# CREATE INDEX IF NOT EXISTS idx_orders_order_date ON Orders (Order_date);
+CREATE INDEX
+commercedb=# \d orders
+                                            Table "public.orders"
+   Column    |            Type             | Collation | Nullable |                 Default                  
+-------------+-----------------------------+-----------+----------+------------------------------------------
+ order_id    | integer                     |           | not null | nextval('orders_order_id_seq'::regclass)
+ order_date  | timestamp without time zone |           |          | 
+ quantity    | integer                     |           | not null | 
+ customer_id | integer                     |           | not null | 
+Indexes:
+    "orders_pkey" PRIMARY KEY, btree (order_id)
+    "idx_orders_customer_id" btree (customer_id)
+    "idx_orders_customer_id_order_date" btree (customer_id, order_date)
+    "idx_orders_order_date" btree (order_date)
+Foreign-key constraints:
+    "orders_customer_id_fkey" FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
+Referenced by:
+    TABLE "orders_products" CONSTRAINT "orders_products_order_id_fkey" FOREIGN KEY (order_id) REFERENCES orders(order_id)
+
+commercedb=# \d accounts
+                                     Table "public.accounts"
+   Column    |     Type     | Collation | Nullable |                   Default                    
+-------------+--------------+-----------+----------+----------------------------------------------
+ account_id  | integer      |           | not null | nextval('accounts_account_id_seq'::regclass)
+ balance     | numeric(6,2) |           |          | 
+ customer_id | integer      |           |          | 
+Indexes:
+    "accounts_pkey" PRIMARY KEY, btree (account_id)
+    "accounts_customer_id_key" UNIQUE CONSTRAINT, btree (customer_id)
+Foreign-key constraints:
+    "accounts_customer_id_fkey" FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
+
+commercedb=# CREATE INDEX IF NOT EXISTS idx_accounts_customer_id ON Accounts (Customer_id);
+CREATE INDEX
+commercedb=# \d accounts
+                                     Table "public.accounts"
+   Column    |     Type     | Collation | Nullable |                   Default                    
+-------------+--------------+-----------+----------+----------------------------------------------
+ account_id  | integer      |           | not null | nextval('accounts_account_id_seq'::regclass)
+ balance     | numeric(6,2) |           |          | 
+ customer_id | integer      |           |          | 
+Indexes:
+    "accounts_pkey" PRIMARY KEY, btree (account_id)
+    "accounts_customer_id_key" UNIQUE CONSTRAINT, btree (customer_id)
+    "idx_accounts_customer_id" btree (customer_id)
+Foreign-key constraints:
+    "accounts_customer_id_fkey" FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
+
+commercedb=# \d prices
+                                    Table "public.prices"
+   Column   |     Type      | Collation | Nullable |                 Default                  
+------------+---------------+-----------+----------+------------------------------------------
+ price_id   | integer       |           | not null | nextval('prices_price_id_seq'::regclass)
+ product_id | integer       |           | not null | 
+ price      | numeric(10,2) |           | not null | 
+Indexes:
+    "prices_pkey" PRIMARY KEY, btree (price_id)
+Foreign-key constraints:
+    "prices_product_id_fkey" FOREIGN KEY (product_id) REFERENCES products(product_id)
+
+commercedb=# CREATE INDEX IF NOT EXISTS idx_prices_product_id ON prices (Product_id);
+CREATE INDEX
+commercedb=# \d prices
+                                    Table "public.prices"
+   Column   |     Type      | Collation | Nullable |                 Default                  
+------------+---------------+-----------+----------+------------------------------------------
+ price_id   | integer       |           | not null | nextval('prices_price_id_seq'::regclass)
+ product_id | integer       |           | not null | 
+ price      | numeric(10,2) |           | not null | 
+Indexes:
+    "prices_pkey" PRIMARY KEY, btree (price_id)
+    "idx_prices_product_id" btree (product_id)
+Foreign-key constraints:
+    "prices_product_id_fkey" FOREIGN KEY (product_id) REFERENCES products(product_id)
+
+commercedb=# \d products
+                                           Table "public.products"
+    Column    |          Type          | Collation | Nullable |                   Default                    
+--------------+------------------------+-----------+----------+----------------------------------------------
+ product_id   | integer                |           | not null | nextval('products_product_id_seq'::regclass)
+ supplier_id  | integer                |           | not null | 
+ product_name | character varying(100) |           | not null | 
+Indexes:
+    "products_pkey" PRIMARY KEY, btree (product_id)
+Foreign-key constraints:
+    "products_supplier_id_fkey" FOREIGN KEY (supplier_id) REFERENCES suppliers(supplier_id)
+Referenced by:
+    TABLE "orders_products" CONSTRAINT "orders_products_product_id_fkey" FOREIGN KEY (product_id) REFERENCES products(product_id)
+    TABLE "prices" CONSTRAINT "prices_product_id_fkey" FOREIGN KEY (product_id) REFERENCES products(product_id)
+
+commercedb=# CREATE INDEX IF NOT EXISTS idx_products_supplier_id ON Products (Supplier_id);
+CREATE INDEX
+commercedb=# \d products
+                                           Table "public.products"
+    Column    |          Type          | Collation | Nullable |                   Default                    
+--------------+------------------------+-----------+----------+----------------------------------------------
+ product_id   | integer                |           | not null | nextval('products_product_id_seq'::regclass)
+ supplier_id  | integer                |           | not null | 
+ product_name | character varying(100) |           | not null | 
+Indexes:
+    "products_pkey" PRIMARY KEY, btree (product_id)
+    "idx_products_supplier_id" btree (supplier_id)
+Foreign-key constraints:
+    "products_supplier_id_fkey" FOREIGN KEY (supplier_id) REFERENCES suppliers(supplier_id)
+Referenced by:
+    TABLE "orders_products" CONSTRAINT "orders_products_product_id_fkey" FOREIGN KEY (product_id) REFERENCES products(product_id)
+    TABLE "prices" CONSTRAINT "prices_product_id_fkey" FOREIGN KEY (product_id) REFERENCES products(product_id)
+
+
+
+--Post Optimization
+
+--Try1
+
+                                                                             QUERY PLAN                                                                              
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=109626.18..110006.25 rows=10 width=160) (actual time=1062.491..1088.382 rows=10 loops=1)
+   Output: c.customer_name, c.contact_info, o.order_id, o.order_date, o.quantity, p.product_name, pr.price, s.supplier_name, a.balance
+   Buffers: shared hit=54170
+   InitPlan 1 (returns $0)
+     ->  Limit  (cost=0.00..2485.00 rows=1 width=4) (actual time=0.034..0.035 rows=1 loops=1)
+           Output: suppliers.supplier_id
+           Buffers: shared hit=1
+           ->  Seq Scan on public.suppliers  (cost=0.00..2485.00 rows=1 width=4) (actual time=0.028..0.028 rows=1 loops=1)
+                 Output: suppliers.supplier_id
+                 Filter: ((suppliers.supplier_name)::text = '0202521e5b58ac90e003a8d0025621c4'::text)
+                 Buffers: shared hit=1
+   InitPlan 2 (returns $2)
+     ->  Finalize Aggregate  (cost=107138.56..107138.57 rows=1 width=32) (actual time=1034.388..1059.795 rows=1 loops=1)
+           Output: avg(prices.price)
+           Buffers: shared hit=54055
+           ->  Gather  (cost=107138.34..107138.55 rows=2 width=32) (actual time=1034.188..1059.753 rows=3 loops=1)
+                 Output: (PARTIAL avg(prices.price))
+                 Workers Planned: 2
+                 Workers Launched: 2
+                 Buffers: shared hit=54055
+                 ->  Partial Aggregate  (cost=106138.34..106138.35 rows=1 width=32) (actual time=1010.917..1010.918 rows=1 loops=3)
+                       Output: PARTIAL avg(prices.price)
+                       Buffers: shared hit=54055
+                       Worker 0:  actual time=999.490..999.491 rows=1 loops=1
+                         JIT:
+                           Functions: 8
+                           Options: Inlining false, Optimization false, Expressions true, Deforming true
+                           Timing: Generation 0.835 ms, Inlining 0.000 ms, Optimization 0.407 ms, Emission 8.332 ms, Total 9.574 ms
+                         Buffers: shared hit=16209
+                       Worker 1:  actual time=999.492..999.492 rows=1 loops=1
+                         JIT:
+                           Functions: 8
+                           Options: Inlining false, Optimization false, Expressions true, Deforming true
+                           Timing: Generation 0.835 ms, Inlining 0.000 ms, Optimization 0.407 ms, Emission 8.333 ms, Total 9.576 ms
+                         Buffers: shared hit=13642
+                       ->  Parallel Seq Scan on public.prices  (cost=0.00..95721.67 rows=4166667 width=6) (actual time=0.019..376.674 rows=3333333 loops=3)
+                             Output: prices.price_id, prices.product_id, prices.price
+                             Buffers: shared hit=54055
+                             Worker 0:  actual time=0.028..375.510 rows=2998665 loops=1
+                               Buffers: shared hit=16209
+                             Worker 1:  actual time=0.027..375.907 rows=2523770 loops=1
+                               Buffers: shared hit=13642
+ ->  Nested Loop  (cost=2.61..1294.84 rows=34 width=160) (actual time=1034.701..1035.181 rows=10 loops=1)
+         Output: c.customer_name, c.contact_info, o.order_id, o.order_date, o.quantity, p.product_name, pr.price, s.supplier_name, a.balance
+         Buffers: shared hit=54170
+         ->  Nested Loop  (cost=1.74..29.33 rows=1 width=125) (actual time=0.213..0.216 rows=1 loops=1)
+               Output: c.customer_name, c.contact_info, o.order_id, o.order_date, o.quantity, a.balance, s.supplier_name, s.supplier_id
+               Buffers: shared hit=17
+               ->  Nested Loop  (cost=1.45..21.01 rows=1 width=88) (actual time=0.154..0.156 rows=1 loops=1)
+                     Output: c.customer_name, c.contact_info, o.order_id, o.order_date, o.quantity, a.balance
+                     Inner Unique: true
+                     Buffers: shared hit=13
+                     ->  Nested Loop  (cost=1.01..17.05 rows=1 width=90) (actual time=0.116..0.117 rows=1 loops=1)
+                           Output: c.customer_name, c.contact_info, c.customer_id, o.order_id, o.order_date, o.quantity, o.customer_id
+                           Inner Unique: true
+                           Buffers: shared hit=9
+                           ->  Index Scan using idx_orders_order_date on public.orders o  (cost=0.57..8.59 rows=1 width=20) (actual time=0.053..0.054 rows=1 loops=1)
+                                 Output: o.order_id, o.order_date, o.quantity, o.customer_id
+                                 Index Cond: (o.order_date = '2023-11-21 16:31:21.334746'::timestamp without time zone)
+                                 Buffers: shared hit=5
+                           ->  Index Scan using customers_pkey on public.customers c  (cost=0.44..8.46 rows=1 width=70) (actual time=0.047..0.047 rows=1 loops=1)
+                                 Output: c.customer_id, c.customer_name, c.contact_info, c.customer_address
+                                 Index Cond: (c.customer_id = o.customer_id)
+                                 Buffers: shared hit=4
+                     ->  Index Scan using accounts_customer_id_key on public.accounts a  (cost=0.44..3.97 rows=1 width=10) (actual time=0.031..0.031 rows=1 loops=1)
+                           Output: a.account_id, a.balance, a.customer_id
+                           Index Cond: (a.customer_id = c.customer_id)
+                           Buffers: shared hit=4
+               ->  Index Scan using suppliers_pkey on public.suppliers s  (cost=0.29..8.31 rows=1 width=37) (actual time=0.011..0.011 rows=1 loops=1)
+                     Output: s.supplier_id, s.supplier_name, s.contact_info
+                     Index Cond: (s.supplier_id = $0)
+                     Buffers: shared hit=3
+         ->  Nested Loop  (cost=0.87..1265.16 rows=34 width=43) (actual time=1034.477..1034.952 rows=10 loops=1)
+               Output: p.product_name, p.supplier_id, pr.price
+               Buffers: shared hit=54153
+               ->  Index Scan using idx_products_supplier_id on public.products p  (cost=0.43..410.20 rows=101 width=41) (actual time=0.042..0.305 rows=19 loops=1)
+                     Output: p.product_id, p.supplier_id, p.product_name
+                     Index Cond: (p.supplier_id = $0)
+                     Buffers: shared hit=22
+               ->  Index Scan using idx_prices_product_id on public.prices pr  (cost=0.43..8.46 rows=1 width=10) (actual time=54.453..54.453 rows=1 loops=19)
+                     Output: pr.price_id, pr.product_id, pr.price
+                     Index Cond: (pr.product_id = p.product_id)
+                     Filter: (pr.price > $2)
+                     Rows Removed by Filter: 0
+                                         Buffers: shared hit=54131
+ Planning:
+   Buffers: shared hit=538
+ Planning Time: 21.030 ms
+ JIT:
+   Functions: 57
+   Options: Inlining false, Optimization false, Expressions true, Deforming true
+   Timing: Generation 4.519 ms, Inlining 0.000 ms, Optimization 1.808 ms, Emission 43.566 ms, Total 49.893 ms
+ Execution Time: 1161.067 ms
+(93 rows)
+
+
+--Try2
+
+                                                                              QUERY PLAN                                                                              
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=109626.18..110006.25 rows=10 width=160) (actual time=1061.755..1087.863 rows=10 loops=1)
+   Output: c.customer_name, c.contact_info, o.order_id, o.order_date, o.quantity, p.product_name, pr.price, s.supplier_name, a.balance
+   Buffers: shared hit=54170
+   InitPlan 1 (returns $0)
+     ->  Limit  (cost=0.00..2485.00 rows=1 width=4) (actual time=0.022..0.023 rows=1 loops=1)
+           Output: suppliers.supplier_id
+           Buffers: shared hit=1
+           ->  Seq Scan on public.suppliers  (cost=0.00..2485.00 rows=1 width=4) (actual time=0.019..0.020 rows=1 loops=1)
+                 Output: suppliers.supplier_id
+                 Filter: ((suppliers.supplier_name)::text = '0202521e5b58ac90e003a8d0025621c4'::text)
+                 Buffers: shared hit=1
+   InitPlan 2 (returns $2)
+     ->  Finalize Aggregate  (cost=107138.56..107138.57 rows=1 width=32) (actual time=1033.951..1059.697 rows=1 loops=1)
+           Output: avg(prices.price)
+           Buffers: shared hit=54055
+           ->  Gather  (cost=107138.34..107138.55 rows=2 width=32) (actual time=1033.691..1059.647 rows=3 loops=1)
+                 Output: (PARTIAL avg(prices.price))
+                 Workers Planned: 2
+                 Workers Launched: 2
+                 Buffers: shared hit=54055
+                 ->  Partial Aggregate  (cost=106138.34..106138.35 rows=1 width=32) (actual time=1010.459..1010.460 rows=1 loops=3)
+                       Output: PARTIAL avg(prices.price)
+                       Buffers: shared hit=54055
+                       Worker 0:  actual time=999.027..999.028 rows=1 loops=1
+                         JIT:
+                           Functions: 8
+                           Options: Inlining false, Optimization false, Expressions true, Deforming true
+                           Timing: Generation 0.853 ms, Inlining 0.000 ms, Optimization 0.399 ms, Emission 8.504 ms, Total 9.756 ms
+                         Buffers: shared hit=13944
+                       Worker 1:  actual time=999.037..999.038 rows=1 loops=1
+                         JIT:
+                           Functions: 8
+                           Options: Inlining false, Optimization false, Expressions true, Deforming true
+                           Timing: Generation 0.856 ms, Inlining 0.000 ms, Optimization 0.399 ms, Emission 8.377 ms, Total 9.632 ms
+                         Buffers: shared hit=14055
+                       ->  Parallel Seq Scan on public.prices  (cost=0.00..95721.67 rows=4166667 width=6) (actual time=0.017..378.011 rows=3333333 loops=3)
+                             Output: prices.price_id, prices.product_id, prices.price
+                             Buffers: shared hit=54055
+                             Worker 0:  actual time=0.024..378.075 rows=2579640 loops=1
+                               Buffers: shared hit=13944
+                             Worker 1:  actual time=0.023..379.505 rows=2600175 loops=1
+                               Buffers: shared hit=14055
+ ->  Nested Loop  (cost=2.61..1294.84 rows=34 width=160) (actual time=1034.226..1034.583 rows=10 loops=1)
+         Output: c.customer_name, c.contact_info, o.order_id, o.order_date, o.quantity, p.product_name, pr.price, s.supplier_name, a.balance
+         Buffers: shared hit=54170
+         ->  Nested Loop  (cost=1.74..29.33 rows=1 width=125) (actual time=0.196..0.199 rows=1 loops=1)
+               Output: c.customer_name, c.contact_info, o.order_id, o.order_date, o.quantity, a.balance, s.supplier_name, s.supplier_id
+               Buffers: shared hit=17
+               ->  Nested Loop  (cost=1.45..21.01 rows=1 width=88) (actual time=0.157..0.158 rows=1 loops=1)
+                     Output: c.customer_name, c.contact_info, o.order_id, o.order_date, o.quantity, a.balance
+                     Inner Unique: true
+                     Buffers: shared hit=13
+                     ->  Nested Loop  (cost=1.01..17.05 rows=1 width=90) (actual time=0.117..0.118 rows=1 loops=1)
+                           Output: c.customer_name, c.contact_info, c.customer_id, o.order_id, o.order_date, o.quantity, o.customer_id
+                           Inner Unique: true
+                           Buffers: shared hit=9
+                           ->  Index Scan using idx_orders_order_date on public.orders o  (cost=0.57..8.59 rows=1 width=20) (actual time=0.053..0.054 rows=1 loops=1)
+                                 Output: o.order_id, o.order_date, o.quantity, o.customer_id
+                                 Index Cond: (o.order_date = '2023-11-21 16:31:21.334746'::timestamp without time zone)
+                                 Buffers: shared hit=5
+                           ->  Index Scan using customers_pkey on public.customers c  (cost=0.44..8.46 rows=1 width=70) (actual time=0.048..0.048 rows=1 loops=1)
+                                 Output: c.customer_id, c.customer_name, c.contact_info, c.customer_address
+                                 Index Cond: (c.customer_id = o.customer_id)
+                                 Buffers: shared hit=4
+                     ->  Index Scan using accounts_customer_id_key on public.accounts a  (cost=0.44..3.97 rows=1 width=10) (actual time=0.032..0.032 rows=1 loops=1)
+                           Output: a.account_id, a.balance, a.customer_id
+                           Index Cond: (a.customer_id = c.customer_id)
+                           Buffers: shared hit=4
+               ->  Index Scan using suppliers_pkey on public.suppliers s  (cost=0.29..8.31 rows=1 width=37) (actual time=0.008..0.008 rows=1 loops=1)
+                     Output: s.supplier_id, s.supplier_name, s.contact_info
+                     Index Cond: (s.supplier_id = $0)
+                     Buffers: shared hit=3
+         ->  Nested Loop  (cost=0.87..1265.16 rows=34 width=43) (actual time=1034.022..1034.375 rows=10 loops=1)
+               Output: p.product_name, p.supplier_id, pr.price
+               Buffers: shared hit=54153
+               ->  Index Scan using idx_products_supplier_id on public.products p  (cost=0.43..410.20 rows=101 width=41) (actual time=0.033..0.228 rows=19 loops=1)
+                     Output: p.product_id, p.supplier_id, p.product_name
+                     Index Cond: (p.supplier_id = $0)
+                     Buffers: shared hit=22
+               ->  Index Scan using idx_prices_product_id on public.prices pr  (cost=0.43..8.46 rows=1 width=10) (actual time=54.427..54.428 rows=1 loops=19)
+                     Output: pr.price_id, pr.product_id, pr.price
+                     Index Cond: (pr.product_id = p.product_id)
+                     Filter: (pr.price > $2)
+                     Rows Removed by Filter: 0
+                     Buffers: shared hit=54131
+ Planning:
+   Buffers: shared hit=538
+ Planning Time: 24.397 ms
+ JIT:
+   Functions: 57
+   Options: Inlining false, Optimization false, Expressions true, Deforming true
+   Timing: Generation 4.581 ms, Inlining 0.000 ms, Optimization 1.794 ms, Emission 43.487 ms, Total 49.862 ms
+ Execution Time: 1155.694 ms
+(93 rows)
+
+
+--Try3
+
+                                                                              QUERY PLAN                                                                              
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=109626.18..110006.25 rows=10 width=160) (actual time=1054.873..1080.894 rows=10 loops=1)
+   Output: c.customer_name, c.contact_info, o.order_id, o.order_date, o.quantity, p.product_name, pr.price, s.supplier_name, a.balance
+   Buffers: shared hit=54170
+   InitPlan 1 (returns $0)
+     ->  Limit  (cost=0.00..2485.00 rows=1 width=4) (actual time=0.036..0.037 rows=1 loops=1)
+           Output: suppliers.supplier_id
+           Buffers: shared hit=1
+           ->  Seq Scan on public.suppliers  (cost=0.00..2485.00 rows=1 width=4) (actual time=0.031..0.031 rows=1 loops=1)
+                 Output: suppliers.supplier_id
+                 Filter: ((suppliers.supplier_name)::text = '0202521e5b58ac90e003a8d0025621c4'::text)
+                 Buffers: shared hit=1
+   InitPlan 2 (returns $2)
+     ->  Finalize Aggregate  (cost=107138.56..107138.57 rows=1 width=32) (actual time=1030.834..1056.466 rows=1 loops=1)
+           Output: avg(prices.price)
+           Buffers: shared hit=54055
+           ->  Gather  (cost=107138.34..107138.55 rows=2 width=32) (actual time=1030.686..1056.436 rows=3 loops=1)
+                 Output: (PARTIAL avg(prices.price))
+                 Workers Planned: 2
+                 Workers Launched: 2
+                 Buffers: shared hit=54055
+                 ->  Partial Aggregate  (cost=106138.34..106138.35 rows=1 width=32) (actual time=1007.693..1007.694 rows=1 loops=3)
+                       Output: PARTIAL avg(prices.price)
+                       Buffers: shared hit=54055
+                       Worker 0:  actual time=996.390..996.391 rows=1 loops=1
+                         JIT:
+                           Functions: 8
+                           Options: Inlining false, Optimization false, Expressions true, Deforming true
+                           Timing: Generation 0.792 ms, Inlining 0.000 ms, Optimization 0.392 ms, Emission 8.980 ms, Total 10.164 ms
+                         Buffers: shared hit=13496
+                       Worker 1:  actual time=996.373..996.374 rows=1 loops=1
+                         JIT:
+                           Functions: 8
+                           Options: Inlining false, Optimization false, Expressions true, Deforming true
+                           Timing: Generation 0.823 ms, Inlining 0.000 ms, Optimization 0.395 ms, Emission 8.983 ms, Total 10.201 ms
+                         Buffers: shared hit=13920
+                       ->  Parallel Seq Scan on public.prices  (cost=0.00..95721.67 rows=4166667 width=6) (actual time=0.020..377.118 rows=3333333 loops=3)
+                             Output: prices.price_id, prices.product_id, prices.price
+                             Buffers: shared hit=54055
+                             Worker 0:  actual time=0.027..380.619 rows=2496760 loops=1
+                               Buffers: shared hit=13496
+                             Worker 1:  actual time=0.028..375.941 rows=2575200 loops=1
+                               Buffers: shared hit=13920
+ ->  Nested Loop  (cost=2.61..1294.84 rows=34 width=160) (actual time=1031.165..1031.550 rows=10 loops=1)
+         Output: c.customer_name, c.contact_info, o.order_id, o.order_date, o.quantity, p.product_name, pr.price, s.supplier_name, a.balance
+         Buffers: shared hit=54170
+         ->  Nested Loop  (cost=1.74..29.33 rows=1 width=125) (actual time=0.248..0.251 rows=1 loops=1)
+               Output: c.customer_name, c.contact_info, o.order_id, o.order_date, o.quantity, a.balance, s.supplier_name, s.supplier_id
+               Buffers: shared hit=17
+               ->  Nested Loop  (cost=1.45..21.01 rows=1 width=88) (actual time=0.191..0.193 rows=1 loops=1)
+                     Output: c.customer_name, c.contact_info, o.order_id, o.order_date, o.quantity, a.balance
+                     Inner Unique: true
+                     Buffers: shared hit=13
+                     ->  Nested Loop  (cost=1.01..17.05 rows=1 width=90) (actual time=0.146..0.147 rows=1 loops=1)
+                           Output: c.customer_name, c.contact_info, c.customer_id, o.order_id, o.order_date, o.quantity, o.customer_id
+                           Inner Unique: true
+                           Buffers: shared hit=9
+                           ->  Index Scan using idx_orders_order_date on public.orders o  (cost=0.57..8.59 rows=1 width=20) (actual time=0.068..0.068 rows=1 loops=1)
+                                 Output: o.order_id, o.order_date, o.quantity, o.customer_id
+                                 Index Cond: (o.order_date = '2023-11-21 16:31:21.334746'::timestamp without time zone)
+                                 Buffers: shared hit=5
+                           ->  Index Scan using customers_pkey on public.customers c  (cost=0.44..8.46 rows=1 width=70) (actual time=0.055..0.055 rows=1 loops=1)
+                                 Output: c.customer_id, c.customer_name, c.contact_info, c.customer_address
+                                 Index Cond: (c.customer_id = o.customer_id)
+                                 Buffers: shared hit=4
+                     ->  Index Scan using accounts_customer_id_key on public.accounts a  (cost=0.44..3.97 rows=1 width=10) (actual time=0.033..0.034 rows=1 loops=1)
+                           Output: a.account_id, a.balance, a.customer_id
+                           Index Cond: (a.customer_id = c.customer_id)
+                           Buffers: shared hit=4
+               ->  Index Scan using suppliers_pkey on public.suppliers s  (cost=0.29..8.31 rows=1 width=37) (actual time=0.009..0.009 rows=1 loops=1)
+                     Output: s.supplier_id, s.supplier_name, s.contact_info
+                     Index Cond: (s.supplier_id = $0)
+                     Buffers: shared hit=3
+         ->  Nested Loop  (cost=0.87..1265.16 rows=34 width=43) (actual time=1030.908..1031.288 rows=10 loops=1)
+               Output: p.product_name, p.supplier_id, pr.price
+               Buffers: shared hit=54153
+               ->  Index Scan using idx_products_supplier_id on public.products p  (cost=0.43..410.20 rows=101 width=41) (actual time=0.033..0.242 rows=19 loops=1)
+                     Output: p.product_id, p.supplier_id, p.product_name
+                     Index Cond: (p.supplier_id = $0)
+                     Buffers: shared hit=22
+               ->  Index Scan using idx_prices_product_id on public.prices pr  (cost=0.43..8.46 rows=1 width=10) (actual time=54.263..54.264 rows=1 loops=19)
+                     Output: pr.price_id, pr.product_id, pr.price
+                     Index Cond: (pr.product_id = p.product_id)
+                     Filter: (pr.price > $2)
+                     Rows Removed by Filter: 0
+                     Buffers: shared hit=54131
+ Planning:
+   Buffers: shared hit=538
+ Planning Time: 41.183 ms
+ JIT:
+   Functions: 57
+   Options: Inlining false, Optimization false, Expressions true, Deforming true
+   Timing: Generation 3.667 ms, Inlining 0.000 ms, Optimization 1.637 ms, Emission 40.916 ms, Total 46.220 ms
+ Execution Time: 1126.423 ms
+(93 rows)
+
+/*
+  By creating indexes on all the foreign keys used by the join operations in the query, we have significantly reduced the query
+  execution and as such improved the performance.
+*/
