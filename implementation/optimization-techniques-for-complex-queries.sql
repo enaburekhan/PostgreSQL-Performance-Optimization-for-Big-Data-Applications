@@ -326,8 +326,8 @@ ORDER BY o.order_date DESC LIMIT 10;
 -- LIMIT 10;
 
 -- Ensure indexes exist
-CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON Orders (Customer_id);
-CREATE INDEX IF NOT EXISTS idx_orders_order_date ON Orders (Order_date);
+-- CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON Orders (Customer_id);
+-- CREATE INDEX IF NOT EXISTS idx_orders_order_date ON Orders (Order_date);
 CREATE INDEX IF NOT EXISTS idx_accounts_customer_id ON Accounts (Customer_id);
 CREATE INDEX IF NOT EXISTS idx_prices_product_id ON prices (Product_id);
 CREATE INDEX IF NOT EXISTS idx_products_supplier_id ON Products (Supplier_id);
@@ -370,6 +370,25 @@ Foreign-key constraints:
     "orders_customer_id_fkey" FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
 Referenced by:
     TABLE "orders_products" CONSTRAINT "orders_products_order_id_fkey" FOREIGN KEY (order_id) REFERENCES orders(order_id)
+
+--corrected Orders table after dropping excess indexes
+commercedb=# \d orders
+                                            Table "public.orders"
+   Column    |            Type             | Collation | Nullable |                 Default                  
+-------------+-----------------------------+-----------+----------+------------------------------------------
+ order_id    | integer                     |           | not null | nextval('orders_order_id_seq'::regclass)
+ order_date  | timestamp without time zone |           |          | 
+ quantity    | integer                     |           | not null | 
+ customer_id | integer                     |           | not null | 
+Indexes:
+    "orders_pkey" PRIMARY KEY, btree (order_id)
+    "idx_orders_customer_id_order_date" btree (customer_id, order_date)
+Foreign-key constraints:
+    "orders_customer_id_fkey" FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
+Referenced by:
+    TABLE "orders_products" CONSTRAINT "orders_products_order_id_fkey" FOREIGN KEY (order_id) REFERENCES orders(order_id)
+
+
 
 commercedb=# \d accounts
                                      Table "public.accounts"
@@ -767,3 +786,258 @@ Referenced by:
   By creating indexes on all the foreign keys used by the join operations in the query, we have significantly reduced the query
   execution and as such improved the performance.
 */
+
+--Further Optimization
+
+
+CREATE MATERIALIZED VIEW avg_price AS
+SELECT AVG(price) AS avg_price FROM prices;
+
+commercedb=# \d+ avg_price
+                                   Materialized view "public.avg_price"
+  Column   |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
+-----------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
+ avg_price | numeric |           |          |         | main    |             |              | 
+View definition:
+ SELECT avg(price) AS avg_price
+   FROM prices;
+Access method: heap
+
+EXPLAIN (ANALYZE, BUFFERS) 
+SELECT c.customer_name, c.contact_info, o.order_id, o.order_date, o.quantity, 
+       p.product_name, pr.price, s.supplier_name, a.balance
+FROM customers c
+JOIN orders o ON c.customer_id = o.customer_id
+JOIN accounts a ON c.customer_id = a.customer_id
+JOIN products p ON p.supplier_id = (
+    SELECT supplier_id 
+    FROM suppliers 
+    WHERE supplier_name = '0202521e5b58ac90e003a8d0025621c4' 
+    LIMIT 1
+)
+JOIN prices pr ON pr.product_id = p.product_id
+JOIN suppliers s ON p.supplier_id = s.supplier_id
+JOIN avg_price ap ON pr.price > ap.avg_price        --Join with Materialized View
+WHERE o.order_date = '2023-11-21 16:31:21.334746'
+ORDER BY o.order_date DESC 
+LIMIT 10;
+
+
+
+--Try1
+commercedb=# EXPLAIN (ANALYZE, BUFFERS) 
+SELECT c.customer_name, c.contact_info, o.order_id, o.order_date, o.quantity, 
+       p.product_name, pr.price, s.supplier_name, a.balance
+FROM customers c
+JOIN orders o ON c.customer_id = o.customer_id
+JOIN accounts a ON c.customer_id = a.customer_id
+JOIN products p ON p.supplier_id = (
+    SELECT supplier_id 
+    FROM suppliers 
+    WHERE supplier_name = '0202521e5b58ac90e003a8d0025621c4' 
+    LIMIT 1
+)
+JOIN prices pr ON pr.product_id = p.product_id
+JOIN suppliers s ON p.supplier_id = s.supplier_id
+JOIN avg_price ap ON pr.price > ap.avg_price        --Join with Materialized View
+WHERE o.order_date = '2023-11-21 16:31:21.334746'
+ORDER BY o.order_date DESC 
+LIMIT 10;
+                                                                             QUERY PLAN                                                                             
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=2487.04..3724.11 rows=10 width=160) (actual time=0.394..1.644 rows=10 loops=1)
+   Buffers: shared hit=112
+   InitPlan 1 (returns $0)
+     ->  Limit  (cost=0.00..2485.00 rows=1 width=4) (actual time=0.017..0.019 rows=1 loops=1)
+           Buffers: shared hit=1
+           ->  Seq Scan on suppliers  (cost=0.00..2485.00 rows=1 width=4) (actual time=0.017..0.017 rows=1 loops=1)
+                 Filter: ((supplier_name)::text = '0202521e5b58ac90e003a8d0025621c4'::text)
+                 Buffers: shared hit=1
+   ->  Nested Loop  (cost=2.04..5664203.06 rows=45787 width=160) (actual time=0.393..1.638 rows=10 loops=1)
+         Join Filter: (pr.price > ap.avg_price)
+         Rows Removed by Join Filter: 9
+         Buffers: shared hit=112
+         ->  Nested Loop  (cost=2.04..5662115.66 rows=101 width=160) (actual time=0.353..1.561 rows=19 loops=1)
+               Buffers: shared hit=111
+               ->  Nested Loop  (cost=1.17..5660849.74 rows=1 width=125) (actual time=0.253..0.256 rows=1 loops=1)
+                     Buffers: shared hit=13
+                     ->  Nested Loop  (cost=0.88..5660841.42 rows=1 width=88) (actual time=0.208..0.210 rows=1 loops=1)
+                           Buffers: shared hit=9
+                           ->  Nested Loop  (cost=0.44..5660837.46 rows=1 width=90) (actual time=0.146..0.147 rows=1 loops=1)
+                                 Buffers: shared hit=5
+                                 ->  Seq Scan on orders o  (cost=0.00..5660829.00 rows=1 width=20) (actual time=0.040..0.040 rows=1 loops=1)
+                                       Filter: (order_date = '2023-11-21 16:31:21.334746'::timestamp without time zone)
+                                       Buffers: shared hit=1
+                                 ->  Index Scan using customers_pkey on customers c  (cost=0.44..8.46 rows=1 width=70) (actual time=0.102..0.102 rows=1 loops=1)
+                                       Index Cond: (customer_id = o.customer_id)
+                                       Buffers: shared hit=4
+                           ->  Index Scan using accounts_customer_id_key on accounts a  (cost=0.44..3.97 rows=1 width=10) (actual time=0.060..0.060 rows=1 loops=1)
+                                 Index Cond: (customer_id = c.customer_id)
+                                 Buffers: shared hit=4
+                     ->  Index Scan using suppliers_pkey on suppliers s  (cost=0.29..8.31 rows=1 width=37) (actual time=0.024..0.025 rows=1 loops=1)
+                           Index Cond: (supplier_id = $0)
+                           Buffers: shared hit=3
+               ->  Nested Loop  (cost=0.87..1264.91 rows=101 width=43) (actual time=0.098..1.294 rows=19 loops=1)
+                     Buffers: shared hit=98
+                     ->  Index Scan using idx_products_supplier_id on products p  (cost=0.43..410.20 rows=101 width=41) (actual time=0.071..0.522 rows=19 loops=1)
+                           Index Cond: (supplier_id = $0)
+                           Buffers: shared hit=22
+                     ->  Index Scan using idx_prices_product_id on prices pr  (cost=0.43..8.45 rows=1 width=10) (actual time=0.038..0.039 rows=1 loops=19)
+                           Index Cond: (product_id = p.product_id)
+                           Buffers: shared hit=76
+         ->  Materialize  (cost=0.00..30.40 rows=1360 width=32) (actual time=0.002..0.002 rows=1 loops=19)
+               Buffers: shared hit=1
+               ->  Seq Scan on avg_price ap  (cost=0.00..23.60 rows=1360 width=32) (actual time=0.022..0.022 rows=1 loops=1)
+                     Buffers: shared hit=1
+ Planning:
+   Buffers: shared hit=579
+ Planning Time: 7.609 ms
+ Execution Time: 1.903 ms
+(48 rows)
+
+
+
+
+
+--Try2
+commercedb=# EXPLAIN (ANALYZE, BUFFERS) 
+SELECT c.customer_name, c.contact_info, o.order_id, o.order_date, o.quantity, 
+       p.product_name, pr.price, s.supplier_name, a.balance
+FROM customers c
+JOIN orders o ON c.customer_id = o.customer_id
+JOIN accounts a ON c.customer_id = a.customer_id
+JOIN products p ON p.supplier_id = (
+    SELECT supplier_id 
+    FROM suppliers 
+    WHERE supplier_name = '0202521e5b58ac90e003a8d0025621c4' 
+    LIMIT 1
+)
+JOIN prices pr ON pr.product_id = p.product_id
+JOIN suppliers s ON p.supplier_id = s.supplier_id
+JOIN avg_price ap ON pr.price > ap.avg_price        --Join with Materialized View
+WHERE o.order_date = '2023-11-21 16:31:21.334746'
+ORDER BY o.order_date DESC 
+LIMIT 10;
+                                                                            QUERY PLAN                                                                             
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=2487.04..3724.11 rows=10 width=160) (actual time=0.785..2.703 rows=10 loops=1)
+   Buffers: shared hit=112
+   InitPlan 1 (returns $0)
+     ->  Limit  (cost=0.00..2485.00 rows=1 width=4) (actual time=0.032..0.034 rows=1 loops=1)
+           Buffers: shared hit=1
+           ->  Seq Scan on suppliers  (cost=0.00..2485.00 rows=1 width=4) (actual time=0.031..0.032 rows=1 loops=1)
+                 Filter: ((supplier_name)::text = '0202521e5b58ac90e003a8d0025621c4'::text)
+                 Buffers: shared hit=1
+   ->  Nested Loop  (cost=2.04..5664203.06 rows=45787 width=160) (actual time=0.783..2.694 rows=10 loops=1)
+         Join Filter: (pr.price > ap.avg_price)
+         Rows Removed by Join Filter: 9
+         Buffers: shared hit=112
+         ->  Nested Loop  (cost=2.04..5662115.66 rows=101 width=160) (actual time=0.705..2.578 rows=19 loops=1)
+               Buffers: shared hit=111
+               ->  Nested Loop  (cost=1.17..5660849.74 rows=1 width=125) (actual time=0.480..0.483 rows=1 loops=1)
+                     Buffers: shared hit=13
+                     ->  Nested Loop  (cost=0.88..5660841.42 rows=1 width=88) (actual time=0.393..0.395 rows=1 loops=1)
+                           Buffers: shared hit=9
+                           ->  Nested Loop  (cost=0.44..5660837.46 rows=1 width=90) (actual time=0.270..0.271 rows=1 loops=1)
+                                 Buffers: shared hit=5
+                                 ->  Seq Scan on orders o  (cost=0.00..5660829.00 rows=1 width=20) (actual time=0.082..0.083 rows=1 loops=1)
+                                       Filter: (order_date = '2023-11-21 16:31:21.334746'::timestamp without time zone)
+                                       Buffers: shared hit=1
+                                 ->  Index Scan using customers_pkey on customers c  (cost=0.44..8.46 rows=1 width=70) (actual time=0.179..0.179 rows=1 loops=1)
+                                       Index Cond: (customer_id = o.customer_id)
+                                       Buffers: shared hit=4
+                           ->  Index Scan using accounts_customer_id_key on accounts a  (cost=0.44..3.97 rows=1 width=10) (actual time=0.118..0.118 rows=1 loops=1)
+                                 Index Cond: (customer_id = c.customer_id)
+                                 Buffers: shared hit=4
+                     ->  Index Scan using suppliers_pkey on suppliers s  (cost=0.29..8.31 rows=1 width=37) (actual time=0.047..0.047 rows=1 loops=1)
+                           Index Cond: (supplier_id = $0)
+                           Buffers: shared hit=3
+               ->  Nested Loop  (cost=0.87..1264.91 rows=101 width=43) (actual time=0.221..2.082 rows=19 loops=1)
+                     Buffers: shared hit=98
+                     ->  Index Scan using idx_products_supplier_id on products p  (cost=0.43..410.20 rows=101 width=41) (actual time=0.134..0.892 rows=19 loops=1)
+                           Index Cond: (supplier_id = $0)
+                           Buffers: shared hit=22
+                     ->  Index Scan using idx_prices_product_id on prices pr  (cost=0.43..8.45 rows=1 width=10) (actual time=0.060..0.060 rows=1 loops=19)
+                           Index Cond: (product_id = p.product_id)
+                           Buffers: shared hit=76
+         ->  Materialize  (cost=0.00..30.40 rows=1360 width=32) (actual time=0.003..0.003 rows=1 loops=19)
+               Buffers: shared hit=1
+               Buffers: shared hit=1
+               ->  Seq Scan on avg_price ap  (cost=0.00..23.60 rows=1360 width=32) (actual time=0.042..0.043 rows=1 loops=1)
+                     Buffers: shared hit=1
+ Planning:
+   Buffers: shared hit=579
+ Planning Time: 10.084 ms
+ Execution Time: 3.365 ms
+(48 rows)
+
+--Try3
+commercedb=# EXPLAIN (ANALYZE, BUFFERS) 
+SELECT c.customer_name, c.contact_info, o.order_id, o.order_date, o.quantity, 
+       p.product_name, pr.price, s.supplier_name, a.balance
+FROM customers c
+JOIN orders o ON c.customer_id = o.customer_id
+JOIN accounts a ON c.customer_id = a.customer_id
+JOIN products p ON p.supplier_id = (
+    SELECT supplier_id 
+    FROM suppliers 
+    WHERE supplier_name = '0202521e5b58ac90e003a8d0025621c4' 
+    LIMIT 1
+)
+JOIN prices pr ON pr.product_id = p.product_id
+JOIN suppliers s ON p.supplier_id = s.supplier_id
+JOIN avg_price ap ON pr.price > ap.avg_price        --Join with Materialized View
+WHERE o.order_date = '2023-11-21 16:31:21.334746'
+ORDER BY o.order_date DESC 
+LIMIT 10;
+                                                                            QUERY PLAN                                                                             
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=2487.04..3724.11 rows=10 width=160) (actual time=0.791..2.732 rows=10 loops=1)
+   Buffers: shared hit=112
+   InitPlan 1 (returns $0)
+     ->  Limit  (cost=0.00..2485.00 rows=1 width=4) (actual time=0.033..0.035 rows=1 loops=1)
+           Buffers: shared hit=1
+           ->  Seq Scan on suppliers  (cost=0.00..2485.00 rows=1 width=4) (actual time=0.032..0.033 rows=1 loops=1)
+                 Filter: ((supplier_name)::text = '0202521e5b58ac90e003a8d0025621c4'::text)
+                 Buffers: shared hit=1
+   ->  Nested Loop  (cost=2.04..5664203.06 rows=45787 width=160) (actual time=0.789..2.722 rows=10 loops=1)
+         Join Filter: (pr.price > ap.avg_price)
+         Rows Removed by Join Filter: 9
+         Buffers: shared hit=112
+         ->  Nested Loop  (cost=2.04..5662115.66 rows=101 width=160) (actual time=0.714..2.608 rows=19 loops=1)
+               Buffers: shared hit=111
+               ->  Nested Loop  (cost=1.17..5660849.74 rows=1 width=125) (actual time=0.531..0.534 rows=1 loops=1)
+                     Buffers: shared hit=13
+                     ->  Nested Loop  (cost=0.88..5660841.42 rows=1 width=88) (actual time=0.444..0.446 rows=1 loops=1)
+                           Buffers: shared hit=9
+                           ->  Nested Loop  (cost=0.44..5660837.46 rows=1 width=90) (actual time=0.319..0.320 rows=1 loops=1)
+                                 Buffers: shared hit=5
+                                 ->  Seq Scan on orders o  (cost=0.00..5660829.00 rows=1 width=20) (actual time=0.095..0.096 rows=1 loops=1)
+                                       Filter: (order_date = '2023-11-21 16:31:21.334746'::timestamp without time zone)
+                                       Buffers: shared hit=1
+                                 ->  Index Scan using customers_pkey on customers c  (cost=0.44..8.46 rows=1 width=70) (actual time=0.213..0.213 rows=1 loops=1)
+                                       Index Cond: (customer_id = o.customer_id)
+                                       Buffers: shared hit=4
+                           ->  Index Scan using accounts_customer_id_key on accounts a  (cost=0.44..3.97 rows=1 width=10) (actual time=0.119..0.119 rows=1 loops=1)
+                                 Index Cond: (customer_id = c.customer_id)
+                                 Buffers: shared hit=4
+                     ->  Index Scan using suppliers_pkey on suppliers s  (cost=0.29..8.31 rows=1 width=37) (actual time=0.047..0.047 rows=1 loops=1)
+                           Index Cond: (supplier_id = $0)
+                           Buffers: shared hit=3
+               ->  Nested Loop  (cost=0.87..1264.91 rows=101 width=43) (actual time=0.179..2.041 rows=19 loops=1)
+                     Buffers: shared hit=98
+                     ->  Index Scan using idx_products_supplier_id on products p  (cost=0.43..410.20 rows=101 width=41) (actual time=0.131..0.853 rows=19 loops=1)
+                           Index Cond: (supplier_id = $0)
+                           Buffers: shared hit=22
+                     ->  Index Scan using idx_prices_product_id on prices pr  (cost=0.43..8.45 rows=1 width=10) (actual time=0.060..0.060 rows=1 loops=19)
+                           Index Cond: (product_id = p.product_id)
+                           Buffers: shared hit=76
+         ->  Materialize  (cost=0.00..30.40 rows=1360 width=32) (actual time=0.003..0.003 rows=1 loops=19)
+               Buffers: shared hit=1
+               ->  Seq Scan on avg_price ap  (cost=0.00..23.60 rows=1360 width=32) (actual time=0.040..0.042 rows=1 loops=1)
+                     Buffers: shared hit=1
+ Planning:
+   Buffers: shared hit=579
+ Planning Time: 11.753 ms
+ Execution Time: 3.244 ms
+(48 rows)
