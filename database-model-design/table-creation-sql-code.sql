@@ -3,7 +3,8 @@ Password for user postgres:
 psql (16.3 (Ubuntu 16.3-0ubuntu0.24.04.1))
 Type "help" for help.
 
-postgres=# \l
+postgres=# CREATE DATABASE commercedb;
+
 postgres=# \q
 (base) ericsson@ericsson-HP-EliteBook-820-G3 ~$ psql -U commercedb
 Password for user commercedb: 

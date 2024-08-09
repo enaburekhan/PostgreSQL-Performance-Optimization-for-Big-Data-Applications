@@ -824,7 +824,7 @@ LIMIT 10;
 
 
 
---Try1
+--Try 1
 commercedb=# EXPLAIN (ANALYZE, BUFFERS) 
 SELECT c.customer_name, c.contact_info, o.order_id, o.order_date, o.quantity, 
        p.product_name, pr.price, s.supplier_name, a.balance
@@ -899,7 +899,7 @@ LIMIT 10;
 
 
 
---Try2
+--Try 2
 commercedb=# EXPLAIN (ANALYZE, BUFFERS) 
 SELECT c.customer_name, c.contact_info, o.order_id, o.order_date, o.quantity, 
        p.product_name, pr.price, s.supplier_name, a.balance
@@ -971,7 +971,7 @@ LIMIT 10;
  Execution Time: 3.365 ms
 (48 rows)
 
---Try3
+--Try 3
 commercedb=# EXPLAIN (ANALYZE, BUFFERS) 
 SELECT c.customer_name, c.contact_info, o.order_id, o.order_date, o.quantity, 
        p.product_name, pr.price, s.supplier_name, a.balance
